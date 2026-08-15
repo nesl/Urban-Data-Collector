@@ -1,0 +1,294 @@
+# Urban Observations
+
+Urban Observations collects live and daily data for Los Angeles from public
+feeds, authenticated APIs, traffic and wildfire cameras, and email alerts. Raw
+observations are written to a configurable data directory for use by SIGMUS,
+IncidentLens, or other analysis pipelines.
+
+## Requirements
+
+- Python 3.10 or newer
+- A Linux host with cron for unattended collection
+- Enough storage for camera images and daily archives
+- Firefox and a compatible geckodriver for ALERTCalifornia
+- Accounts or API keys for PeMS, OpenWeather, PurpleAir, OpenAI, and Gmail
+
+## Installation
+
+```bash
+git clone <repository-url> urban-observations
+cd urban-observations
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+cp config.example.json config.json
+cp .env.example .env
+chmod 600 config.json .env
+```
+
+Edit `config.json` and choose storage locations. Absolute paths are recommended
+for scheduled deployments:
+
+```json
+{
+  "save_folder": "/mnt/urban-data/raw",
+  "backup_folder": "/mnt/urban-backups",
+  "retention_days": 30,
+  "owm_locations": "./extractor_modules/weather/owm_locations.txt",
+  "purpleair_sensors": "./extractor_modules/air/nearby_purpleair_sensors.csv"
+}
+```
+
+Keep the remaining credential placeholders from `config.example.json`. They are
+resolved from `.env` when an extractor starts. Do not commit `config.json` or
+`.env`; both are ignored by Git.
+
+## Credentials
+
+Fill in `.env`:
+
+```dotenv
+PEMS_USERNAME=your_pems_username
+PEMS_PASSWORD=your_pems_password
+OPEN_WEATHER_MAP_API_KEY=your_openweather_key
+PURPLEAIR_API_KEY=your_purpleair_key
+OPENAI_API_KEY=your_openai_key
+INGEST_EMAIL=collector@example.com
+INGEST_EMAIL_PASSWORD=your_gmail_app_password
+```
+
+The Gmail password should be an app password, not the normal account password.
+Use a dedicated ingestion mailbox because successfully processed notification
+messages are deleted.
+
+For an interactive run, load the environment and select the configuration:
+
+```bash
+set -a
+. ./.env
+set +a
+export URBAN_SYSTEM_CONFIG="$PWD/config.json"
+```
+
+`URBAN_SYSTEM_CONFIG` may point to any JSON configuration file. If it is not
+set, the code looks for `config.json` in the current directory. Missing
+environment variables referenced by the JSON produce an error at startup.
+
+## Configure notification sources
+
+X and Citizen data arrive through the Gmail account configured above.
+
+### X
+
+Create an IFTTT applet using
+[Email new tweets from a specific X user](https://ifttt.com/applets/VFS5xmgc-email-new-tweets-from-a-specific-x-user).
+Configure one applet for each X account to monitor and send the messages to the
+ingestion mailbox. The extractor recognizes notification subjects containing
+`twitter` and uses the configured OpenAI key to extract the author, incident
+type, location, time, and message text.
+
+### Citizen
+
+Register for the desired location alerts in the Citizen app and have those
+alerts delivered to the same ingestion mailbox. The Citizen extractor reads and
+parses those alert emails. No Citizen API credential is required by this
+repository.
+
+### PurpleAir sensor inventory
+
+PurpleAir observations require a local inventory of sensor IDs and locations.
+The tracked file
+`extractor_modules/air/nearby_purpleair_sensors.example.csv` contains synthetic
+rows that demonstrate the required format:
+
+```text
+sensor_index,latitude,longitude
+```
+
+The actual file has no header; each row contains a numeric PurpleAir sensor
+index followed by its latitude and longitude. The example identifiers and
+coordinates are illustrative and must not be used for collection.
+
+Generate it with your own PurpleAir API key before running the air collector:
+
+```bash
+python -m extractor_modules.air.air_extract --refresh-sensors
+```
+
+This calls PurpleAir's
+[Get Sensors API](https://api.purpleair.com/#api-sensors-get-sensors-data),
+selects outdoor sensors around Los Angeles, chooses a geographically distributed
+subset, and writes the CSV configured by `purpleair_sensors`. API calls consume
+PurpleAir points.
+
+The generated CSV is ignored and is not distributed with this repository.
+PurpleAir data is subject to its
+[Data Licensing requirements](https://www2.purpleair.com/pages/license),
+including attribution and distribution restrictions. Each deployment should
+obtain the inventory directly from PurpleAir under its own API credentials.
+
+## Data sources and collection schedule
+
+The installed `cron_jobs` file is the schedule of record.
+
+| Source | Data access | Frequency | Output beneath `save_folder` |
+|---|---|---:|---|
+| GDELT Visual KG | `http://data.gdeltproject.org/gdeltv3/vgkg/lastupdate.txt` and the data URL listed there | every minute | `vkg/YYYYMMDD/` |
+| GDELT Events/GKG | `http://data.gdeltproject.org/gdeltv2/lastupdate.txt` and the CSV ZIP URLs listed there | every 15 minutes | `gkg/YYYYMMDD/` |
+| Caltrans PeMS | Authenticated Clearinghouse downloads from `https://pems.dot.ca.gov`; District 7 `station_5min` and `chp_incidents_day` files | daily at 08:00 | `pem_data_station_5min/YYYYMMDD/`, `pem_data_chp_incidents_day/YYYYMMDD/` |
+| Caltrans CCTV | Camera list and streams discovered from `https://cwwp2.dot.ca.gov/vm/streamlist.htm`; LA County cameras | every 15 minutes | `cctv/YYYYMMDD/` |
+| ALERTCalifornia | Cameras discovered from `https://cameras.alertcalifornia.org/?pos=33.9639_-118.2898_10`; LA County bounds | every 30 minutes | `alertcalifornia/YYYYMMDD/` |
+| OpenWeather | OpenWeather API at the locations listed by `owm_locations` | hourly | `weather_data/YYYYMMDD/` |
+| PurpleAir | PurpleAir API for the outdoor sensors listed by `purpleair_sensors` | hourly | `air_data/YYYYMMDD/` |
+| X notifications | IFTTT email notifications read through `imap.gmail.com` | every 5 minutes | `twitter_data/YYYYMMDD/` |
+| Citizen notifications | Registered Citizen alert emails read through `imap.gmail.com` | every 30 minutes | `citizen_data/YYYYMMDD/` |
+| Cleanup and backup | Local storage maintenance | daily at 08:00 | archives completed days under `backup_folder` |
+
+NoiseCapture and SCEDC seismic collectors are included but disabled in
+`cron_jobs` by default. Their commented entries run daily at 03:30 and 08:00,
+respectively. Test them manually before enabling them.
+
+The Los Angeles deployment also uses these checked-in inventories:
+
+- `extractor_modules/weather/owm_locations.txt`
+- `extractor_modules/air/nearby_purpleair_sensors.example.csv` (synthetic format example)
+- `extractor_modules/cctv/cctv.kml`
+- `extractor_modules/seismic/seismic_stations.txt`
+
+The OpenWeather and generated PurpleAir inventory paths can be changed in
+`config.json`. Some LA geographic bounds are defined in the extractor code, so
+replacing an inventory alone does not fully retarget the system to another city.
+
+The included `extractor_modules/cctv/cctv.kml` comes from Caltrans' California
+Open Data dataset
+[Closed Circuit Television](https://data.ca.gov/dataset/closed-circuit-television),
+which describes CCTV locations on the State Highway Network and is published
+under the Creative Commons Attribution license. Source: California Department
+of Transportation (Caltrans).
+
+## Test an extractor manually
+
+Create the configured output directories first:
+
+```bash
+mkdir -p /mnt/urban-data/raw /mnt/urban-backups
+```
+
+Then run one or more collectors from the repository root:
+
+```bash
+python -m extractor_modules.weather.weather_extract
+python -m extractor_modules.air.air_extract
+python -m extractor_modules.cctv.calcctv_extract
+python -m extractor_modules.email.generate_csv --scheduled --delete
+python -m extractor_modules.email.citizen_scrape
+```
+
+These commands contact live services. PeMS, OpenWeather, PurpleAir, and email
+collection fail if their corresponding credentials are absent or invalid.
+Verify that a new dated directory and output file appear under `save_folder`
+before installing the schedule.
+
+## Install the cron schedule
+
+Open `cron_jobs` and replace the three `/ABSOLUTE/PATH/...` values at the top:
+
+```cron
+URBAN_OBSERVATIONS_ROOT=/opt/urban-observations
+URBAN_SYSTEM_CONFIG=/opt/urban-observations/config.json
+URBAN_ENV_FILE=/opt/urban-observations/.env
+```
+
+Install and inspect the schedule:
+
+```bash
+crontab cron_jobs
+crontab -l
+tail -f cron.log
+```
+
+Each cron entry calls `scripts/run_scheduled.sh`. The wrapper loads `.env`,
+exports its variables, changes to the repository root, and runs the virtual
+environment's Python interpreter. This is necessary because cron does not
+normally load the user's interactive shell configuration.
+
+The wrapper uses `.venv/bin/python` by default. Set `URBAN_PYTHON` in
+`cron_jobs` only when intentionally using a virtual environment stored
+elsewhere; it must be an absolute path to an executable Python interpreter.
+
+Do not run the cron schedule and the in-process scheduler simultaneously; doing
+so downloads duplicate observations and can process the same mailbox
+concurrently.
+
+## Optional in-process scheduler
+
+Instead of cron, the extractors can be scheduled by a long-running process:
+
+```bash
+python -m extractor_modules.extractor_scheduler
+```
+
+Its runtime schedule is stored in the ignored file
+`extractor_modules/config/current.json`. On first launch it is created from the
+checked-in `extractor_modules/config/default.json`. The process reloads changes
+every five seconds and also starts the extractor MCP services. Run it under a
+process supervisor such as systemd.
+
+## Storage layout
+
+```text
+<save_folder>/
+├── air_data/YYYYMMDD/
+├── alertcalifornia/YYYYMMDD/
+├── citizen_data/YYYYMMDD/
+├── cctv/YYYYMMDD/
+├── gkg/YYYYMMDD/
+├── noise_planet/YYYYMMDD/            # if enabled
+├── pem_data_chp_incidents_day/YYYYMMDD/
+├── pem_data_station_5min/YYYYMMDD/
+├── seismic/YYYYMMDD/<station>/        # if enabled
+├── twitter_data/YYYYMMDD/
+├── vkg/YYYYMMDD/
+└── weather_data/YYYYMMDD/
+```
+
+The daily cleanup job archives every completed `YYYYMMDD` directory beneath
+`<backup_folder>/raw/<source>/` and retains exactly `retention_days` completed
+days locally for each source. Today's directory and non-date entries are never
+cleanup candidates. Use separate storage for `backup_folder` if it is intended
+to protect against a disk failure.
+
+Before enabling cron, preview the plan and validate existing archives without
+changing data:
+
+```bash
+python -m extractor_modules.clean_daily_data --dry-run
+```
+
+Use `--max-days N` for a one-time retention override. During a real run, new
+archives are written to temporary files, validated, and atomically renamed. The
+deletion phase starts only after every completed day has a readable archive. If
+any archive fails, the command exits nonzero before deleting raw directories.
+On an existing installation, the first successful run may need substantial
+temporary and backup capacity; review the dry-run summary and available space
+before running without `--dry-run`.
+
+## Troubleshooting
+
+- Check `cron.log` and the modification time of each source's newest file.
+- If ALERTCalifornia stops after a browser update, install a geckodriver version
+  compatible with the installed Firefox version.
+- GDELT `lastupdate.txt` can lag or point to an incomplete download.
+- PeMS daily files may be published late, especially near month boundaries.
+- If cron reports a missing credential, confirm `URBAN_ENV_FILE` is an absolute,
+  readable path and that `.env` uses plain `NAME=value` assignments.
+- If files are written to an unexpected location, use absolute paths in
+  `config.json` and confirm `URBAN_SYSTEM_CONFIG` points to that file.
+- Do not enable HTTP-level debugging in the PeMS client: request tracing can
+  include the login form and expose credentials in `cron.log`.
+
+## Tests
+
+```bash
+python -m pytest -q
+```

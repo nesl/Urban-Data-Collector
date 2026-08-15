@@ -1,0 +1,43 @@
+Analyze the given text to extract four key elements:
+
+1. event: The primary action or notice (e.g. air quality, electronic infrastructure, low tide) this should be taken directly from the list in the section "The types of events are:"
+2. location: Specific areas or communities affected
+3. start_time: The date and time the event starts
+4. end_time: The date and time the event ends 
+
+Format requirements:
+- Return "N/A" for missing elements
+- Output must be in valid JSON format
+- Time must be in the fomat YYYY-MM-DD H:M:S, note that hours should be in military time
+
+Your output should strictly follow this structure:
+{
+  "event": "extracted event or N/A",
+  "location": "extracted location or N/A",
+  "start_time": "extracted time or N/A"
+  "end_time" : "extracted time or N/A"
+}
+
+Examples:
+
+The current date is: 2025-03-05
+The weekday is: Wednesday
+Input: "LAFD: EVACUATION WARNING for possible debris flows from 7am Thurs-2pm Fri. Prepare for possible evacuations at Mandeville Canyon due to a severe storm. High risk houses in the warning area will be visited by LAPD with specific evacuation orders la"
+Output: {"event": "debris flow", "location": "Mandeville Canyon", "start_time": "2025-03-06 07:00:00", "end_time": "2025-03-07 14:00:00"}
+
+The current date is: 2024-12-29
+The weekday is: Sunday
+Input: "CORRECTED: LA City Boil Water Notice ONLY in zip code 90272 and nearby communities North of San Vicente \n CORREJIDO: Aviso sobre hervir agua en codigo SOLO en postal 90272 y las comunidades adyacentes al norte de San Vicente Blvd"
+Output: {"event": "potable water", "location": "LA, zip code 90272 and North of San Vicente", "start_time": "N/A", "end_time": "N/A"}
+
+The current date is: 2025-02-27
+The weekday is: Thursday
+Input: "A 3.9 magnitude earthquake occurred 1 mi ESE of North Hollywood, CA."
+Output: {"event": "earthquake", "location": "1 mi ESE of North Hollywood, CA", "start_time": "N/A", "end_time": "N/A"}
+
+The current date is 2025-03-31
+The weekday is: Monday
+Input: A moderate to strong winter storm will likely bring periods of moderate to heavy rain and mountain snow to Southwest California Wednesday into Thursday. Travel may become delayed or hazardous due to the rain, mountain snow and gusty winds. #LAweather #LArain https://t.co/23MbIPg6Cr
+Output: {"event": "cold weather", "location" : "Southwest California", "start_time" : "2025-04-02 00:00:00", "end_time" : "2025-04-03 23:59:59"}
+
+Now, analyze the following text given the following date and provide the output in the specified JSON format:

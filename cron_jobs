@@ -1,0 +1,33 @@
+# Urban Observations cron schedule
+#
+# Before installing, replace all /ABSOLUTE/PATH values. Cron does not use your
+# interactive shell setup, so these must be absolute paths. Credentials remain
+# outside this file and are loaded through URBAN_SYSTEM_CONFIG.
+SHELL=/bin/bash
+URBAN_OBSERVATIONS_ROOT=/ABSOLUTE/PATH/TO/urban-observations
+URBAN_SYSTEM_CONFIG=/ABSOLUTE/PATH/TO/urban-observations/config.json
+URBAN_ENV_FILE=/ABSOLUTE/PATH/TO/urban-observations/.env
+
+# GDELT Visual KG and Events/GKG feeds.
+* * * * * "$URBAN_OBSERVATIONS_ROOT/scripts/run_scheduled.sh" -m extractor_modules.gdelt.gdelt_extract --type vkg >> "$URBAN_OBSERVATIONS_ROOT/cron.log" 2>&1
+*/15 * * * * "$URBAN_OBSERVATIONS_ROOT/scripts/run_scheduled.sh" -m extractor_modules.gdelt.gdelt_extract --type gkg >> "$URBAN_OBSERVATIONS_ROOT/cron.log" 2>&1
+
+# Daily PeMS files are published after the day they describe.
+0 8 * * * "$URBAN_OBSERVATIONS_ROOT/scripts/run_scheduled.sh" -m extractor_modules.pems.pems_extract >> "$URBAN_OBSERVATIONS_ROOT/cron.log" 2>&1
+
+# Camera snapshots and hourly environmental observations.
+*/15 * * * * "$URBAN_OBSERVATIONS_ROOT/scripts/run_scheduled.sh" -m extractor_modules.cctv.calcctv_extract >> "$URBAN_OBSERVATIONS_ROOT/cron.log" 2>&1
+*/30 * * * * "$URBAN_OBSERVATIONS_ROOT/scripts/run_scheduled.sh" -m extractor_modules.alertcalifornia.alertcalifornia_extract >> "$URBAN_OBSERVATIONS_ROOT/cron.log" 2>&1
+0 * * * * "$URBAN_OBSERVATIONS_ROOT/scripts/run_scheduled.sh" -m extractor_modules.weather.weather_extract >> "$URBAN_OBSERVATIONS_ROOT/cron.log" 2>&1
+0 * * * * "$URBAN_OBSERVATIONS_ROOT/scripts/run_scheduled.sh" -m extractor_modules.air.air_extract >> "$URBAN_OBSERVATIONS_ROOT/cron.log" 2>&1
+
+# Email-backed X and Citizen ingestion.
+*/5 * * * * "$URBAN_OBSERVATIONS_ROOT/scripts/run_scheduled.sh" -m extractor_modules.email.generate_csv --scheduled --delete >> "$URBAN_OBSERVATIONS_ROOT/cron.log" 2>&1
+*/30 * * * * "$URBAN_OBSERVATIONS_ROOT/scripts/run_scheduled.sh" -m extractor_modules.email.citizen_scrape >> "$URBAN_OBSERVATIONS_ROOT/cron.log" 2>&1
+
+# Back up completed days and retain the most recent 30 days locally.
+0 8 * * * "$URBAN_OBSERVATIONS_ROOT/scripts/run_scheduled.sh" -m extractor_modules.clean_daily_data >> "$URBAN_OBSERVATIONS_ROOT/cron.log" 2>&1
+
+# Optional daily sources. Enable these only after testing them in your deployment.
+# 0 8 * * * "$URBAN_OBSERVATIONS_ROOT/scripts/run_scheduled.sh" -m extractor_modules.seismic.seismic_extract >> "$URBAN_OBSERVATIONS_ROOT/cron.log" 2>&1
+# 30 3 * * * "$URBAN_OBSERVATIONS_ROOT/scripts/run_scheduled.sh" -m extractor_modules.noise.noiseplanet_extract >> "$URBAN_OBSERVATIONS_ROOT/cron.log" 2>&1

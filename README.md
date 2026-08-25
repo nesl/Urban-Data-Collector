@@ -7,11 +7,25 @@ IncidentLens, or other analysis pipelines.
 
 ## Requirements
 
-- Docker Engine with the Compose plugin (recommended), or Python 3.10 or newer
-- A Linux host with cron only when using the non-Docker installation
 - Enough storage for camera images and daily archives
-- Chromium and chromedriver for a non-Docker ALERTCalifornia installation
 - Accounts or API keys for PeMS, OpenWeather, PurpleAir, OpenAI, and Gmail
+- Docker Engine with the Compose plugin for the recommended deployment
+- For the legacy non-Docker deployment: Python 3.10+, cron, Chromium, and a
+  compatible chromedriver
+
+## Choose one deployment mode
+
+The repository supports two alternative ways to run the same collectors. Do
+not run both on one dataset.
+
+| Mode | Scheduling | Host setup | Intended use |
+|---|---|---|---|
+| Docker Compose (recommended) | APScheduler inside each source container | Docker only; no host crontab | New and production deployments |
+| Local Python + cron | Host `crontab` invokes the virtual environment | Python, browser dependencies, and cron | Existing non-Docker deployments |
+
+The Docker services do not run cron. Their scheduler accepts familiar
+five-field cron expressions, but it runs as Python inside each container. The
+checked-in `cron_jobs` file is used only by the local Python deployment.
 
 ## Installation
 
@@ -37,8 +51,9 @@ permissions because they may contain plaintext credentials:
 chmod 600 config.json .env
 ```
 
-By default, data is stored in `./pulled_data`, backups in `./backups`, and cron
-times use `America/Los_Angeles`. Override these without editing Compose:
+By default, data is stored in `./pulled_data`, backups in `./backups`, and
+scheduled times use `America/Los_Angeles`. Override these without editing
+Compose:
 
 ```dotenv
 TZ=America/Los_Angeles
@@ -61,9 +76,11 @@ export URBAN_BACKUP_DIR=/mnt/urban-backups
 docker compose up -d --build
 ```
 
-The schedules in `compose.yaml` mirror `cron_jobs`. A job is
-never run more than once concurrently within its service; failures are logged
-and the next scheduled run still occurs. Inspect all logs with
+Docker schedules are defined directly in `compose.yaml`; Docker does not read
+the `cron_jobs` file. The two files currently use equivalent timings for their
+respective deployment modes. A job is never run more than once concurrently
+within its service; failures are logged and the next scheduled run still
+occurs. Inspect all logs with
 `docker compose logs -f`, stop with `docker compose down`, and start a subset
 with a command such as `docker compose up -d cctv weather`.
 
@@ -92,7 +109,7 @@ all services; use an explicit service list for a staged rollout.
 Do not install `cron_jobs` or start `extractor_scheduler` alongside Compose,
 because that would duplicate collection and could race on the email mailbox.
 
-### Local Python and cron
+### Local Python and cron (legacy alternative)
 
 ```bash
 git clone <repository-url> urban-observations
@@ -269,7 +286,7 @@ collection fail if their corresponding credentials are absent or invalid.
 Verify that a new dated directory and output file appear under `save_folder`
 before installing the schedule.
 
-## Install the cron schedule
+## Install the cron schedule (local Python mode only)
 
 Open `cron_jobs` and replace the three `/ABSOLUTE/PATH/...` values at the top:
 
@@ -300,9 +317,11 @@ Do not run the cron schedule and the in-process scheduler simultaneously; doing
 so downloads duplicate observations and can process the same mailbox
 concurrently.
 
-## Optional in-process scheduler
+## Advanced alternative: single-process scheduler
 
-Instead of cron, the extractors can be scheduled by a long-running process:
+This is retained for integrations that use the extractor MCP services. It is
+not part of the Docker Compose deployment. Instead of cron, the local extractors
+can be scheduled by one long-running process:
 
 ```bash
 python -m extractor_modules.extractor_scheduler
@@ -338,8 +357,8 @@ days locally for each source. Today's directory and non-date entries are never
 cleanup candidates. Use separate storage for `backup_folder` if it is intended
 to protect against a disk failure.
 
-Before enabling cron, preview the plan and validate existing archives without
-changing data:
+Before enabling automatic cleanup in either deployment mode, preview the plan
+and validate existing archives without changing data:
 
 ```bash
 python -m extractor_modules.clean_daily_data --dry-run

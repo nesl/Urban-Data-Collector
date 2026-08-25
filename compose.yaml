@@ -1,0 +1,70 @@
+x-collector: &collector
+  build: .
+  image: urban-data-collector:local
+  restart: unless-stopped
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    URBAN_SYSTEM_CONFIG: /app/config.json
+    URBAN_SAVE_FOLDER: /data
+    URBAN_BACKUP_FOLDER: /backups
+    URBAN_OWM_LOCATIONS: /app/extractor_modules/weather/owm_locations.txt
+    URBAN_PURPLEAIR_SENSORS: /data/.config/nearby_purpleair_sensors.csv
+    URBAN_CCTV_LOCATIONS: /app/extractor_modules/cctv/cctv.kml
+    TZ: ${TZ:-America/Los_Angeles}
+  volumes:
+    - ${URBAN_CONFIG_FILE:-./config.json}:/app/config.json:ro
+    - ${URBAN_DATA_DIR:-./pulled_data}:/data
+    - ${URBAN_BACKUP_DIR:-./backups}:/backups
+
+services:
+  gdelt-vkg:
+    <<: *collector
+    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "* * * * *", "--", "python", "-m", "extractor_modules.gdelt.gdelt_extract", "--type", "vkg"]
+
+  gdelt-gkg:
+    <<: *collector
+    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "*/15 * * * *", "--", "python", "-m", "extractor_modules.gdelt.gdelt_extract", "--type", "gkg"]
+
+  pems:
+    <<: *collector
+    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "0 8 * * *", "--", "python", "-m", "extractor_modules.pems.pems_extract"]
+
+  cctv:
+    <<: *collector
+    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "*/15 * * * *", "--", "python", "-m", "extractor_modules.cctv.calcctv_extract"]
+
+  alertcalifornia:
+    <<: *collector
+    shm_size: 2gb
+    environment:
+      URBAN_SYSTEM_CONFIG: /app/config.json
+      URBAN_SAVE_FOLDER: /data
+      URBAN_BACKUP_FOLDER: /backups
+      URBAN_OWM_LOCATIONS: /app/extractor_modules/weather/owm_locations.txt
+      URBAN_PURPLEAIR_SENSORS: /data/.config/nearby_purpleair_sensors.csv
+      URBAN_CCTV_LOCATIONS: /app/extractor_modules/cctv/cctv.kml
+      TZ: ${TZ:-America/Los_Angeles}
+      CHROMEDRIVER: /usr/bin/chromedriver
+    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "*/30 * * * *", "--", "python", "-m", "extractor_modules.alertcalifornia.alertcalifornia_extract"]
+
+  weather:
+    <<: *collector
+    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "0 * * * *", "--", "python", "-m", "extractor_modules.weather.weather_extract"]
+
+  air:
+    <<: *collector
+    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "0 * * * *", "--", "python", "-m", "extractor_modules.air.air_extract"]
+
+  twitter-email:
+    <<: *collector
+    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "*/5 * * * *", "--", "python", "-m", "extractor_modules.email.generate_csv", "--scheduled", "--delete"]
+
+  citizen-email:
+    <<: *collector
+    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "*/30 * * * *", "--", "python", "-m", "extractor_modules.email.citizen_scrape"]
+
+  cleanup:
+    <<: *collector
+    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "0 8 * * *", "--", "python", "-m", "extractor_modules.clean_daily_data"]

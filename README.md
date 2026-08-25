@@ -7,13 +7,92 @@ IncidentLens, or other analysis pipelines.
 
 ## Requirements
 
-- Python 3.10 or newer
-- A Linux host with cron for unattended collection
+- Docker Engine with the Compose plugin (recommended), or Python 3.10 or newer
+- A Linux host with cron only when using the non-Docker installation
 - Enough storage for camera images and daily archives
-- Firefox and a compatible geckodriver for ALERTCalifornia
+- Chromium and chromedriver for a non-Docker ALERTCalifornia installation
 - Accounts or API keys for PeMS, OpenWeather, PurpleAir, OpenAI, and Gmail
 
 ## Installation
+
+### Docker Compose (recommended)
+
+Docker Compose replaces both the Python virtual environment and host cron. Each
+data source runs as a long-lived service with its own in-container APScheduler;
+all services write through the same mounted data and backup directories.
+
+```bash
+cp config.docker.example.json config.json
+cp .env.example .env
+# Add credentials to .env, then:
+docker compose up -d --build
+docker compose ps
+docker compose logs -f cctv
+```
+
+Keep `config.json` and `.env` out of version control and restrict their
+permissions because they may contain plaintext credentials:
+
+```bash
+chmod 600 config.json .env
+```
+
+By default, data is stored in `./pulled_data`, backups in `./backups`, and cron
+times use `America/Los_Angeles`. Override these without editing Compose:
+
+```dotenv
+TZ=America/Los_Angeles
+URBAN_DATA_DIR=/mnt/urban-data/raw
+URBAN_BACKUP_DIR=/mnt/urban-backups
+URBAN_CONFIG_FILE=./config.json
+```
+
+Add those values to `.env` if desired. `URBAN_CONFIG_FILE` may point to an
+existing configuration outside this repository. Compose overrides its storage
+and inventory paths with the stable container mounts, while leaving credentials
+and other settings unchanged. Docker creates the host directories when
+the stack starts. For example, a deployment using a shared configuration can be
+started without copying its secrets into this repository:
+
+```bash
+export URBAN_CONFIG_FILE=/home/user/urban-system/config.json
+export URBAN_DATA_DIR=/mnt/urban-data/raw
+export URBAN_BACKUP_DIR=/mnt/urban-backups
+docker compose up -d --build
+```
+
+The schedules in `compose.yaml` mirror `cron_jobs`. A job is
+never run more than once concurrently within its service; failures are logged
+and the next scheduled run still occurs. Inspect all logs with
+`docker compose logs -f`, stop with `docker compose down`, and start a subset
+with a command such as `docker compose up -d cctv weather`.
+
+The PurpleAir inventory must exist before the scheduled air collector runs.
+The Docker example stores it under `/data/.config`, so this one-off command
+persists it in the shared data mount:
+
+```bash
+docker compose run --rm air python -m extractor_modules.air.air_extract --refresh-sensors
+```
+
+After startup, confirm that the schedulers are running and inspect each source
+before relying on unattended collection:
+
+```bash
+docker compose ps
+docker compose logs --tail=50 weather cctv alertcalifornia
+find "${URBAN_DATA_DIR:-./pulled_data}" -type f | head
+```
+
+The email-backed X collector runs with `--delete`: successfully processed
+messages are deleted from the ingestion mailbox. Test email credentials using a
+dedicated mailbox before enabling that service. `docker compose up -d` enables
+all services; use an explicit service list for a staged rollout.
+
+Do not install `cron_jobs` or start `extractor_scheduler` alongside Compose,
+because that would duplicate collection and could race on the email mailbox.
+
+### Local Python and cron
 
 ```bash
 git clone <repository-url> urban-observations
@@ -129,7 +208,8 @@ obtain the inventory directly from PurpleAir under its own API credentials.
 
 ## Data sources and collection schedule
 
-The installed `cron_jobs` file is the schedule of record.
+`compose.yaml` and `cron_jobs` contain equivalent default schedules for their
+respective deployment methods.
 
 | Source | Data access | Frequency | Output beneath `save_folder` |
 |---|---|---:|---|
@@ -276,8 +356,9 @@ before running without `--dry-run`.
 ## Troubleshooting
 
 - Check `cron.log` and the modification time of each source's newest file.
-- If ALERTCalifornia stops after a browser update, install a geckodriver version
-  compatible with the installed Firefox version.
+- If ALERTCalifornia stops after a browser update, rebuild the image so Chromium
+  and chromedriver are updated together. For a local installation, ensure their
+  versions are compatible.
 - GDELT `lastupdate.txt` can lag or point to an incomplete download.
 - PeMS daily files may be published late, especially near month boundaries.
 - If cron reports a missing credential, confirm `URBAN_ENV_FILE` is an absolute,

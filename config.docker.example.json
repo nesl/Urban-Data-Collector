@@ -1,0 +1,13 @@
+{
+  "save_folder": "/data",
+  "backup_folder": "/backups",
+  "retention_days": 30,
+  "owm_locations": "/app/extractor_modules/weather/owm_locations.txt",
+  "purpleair_sensors": "/data/.config/nearby_purpleair_sensors.csv",
+  "pem_username": "${PEMS_USERNAME}",
+  "pem_password": "${PEMS_PASSWORD}",
+  "open_weather_map_api_key": "${OPEN_WEATHER_MAP_API_KEY}",
+  "purpleair_api_key": "${PURPLEAIR_API_KEY}",
+  "openai": {"api": "${OPENAI_API_KEY}"},
+  "email_acc_info": {"email": "${INGEST_EMAIL}", "password": "${INGEST_EMAIL_PASSWORD}"}
+}

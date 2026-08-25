@@ -406,9 +406,13 @@ def pull_data(chosen_sensors=[], exclude_sensors=[]):
     # Set up browser options
     browser_options = Options()
     browser_options.add_argument("--headless")  # Enable headless mode
+    browser_options.add_argument("--no-sandbox")
+    browser_options.add_argument("--disable-dev-shm-usage")
 
     # Initialize the WebDriver with the options
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=browser_options)  # Automatically downloads and manages ChromeDriver
+    driver_path = os.environ.get("CHROMEDRIVER")
+    service = Service(driver_path or ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=browser_options)
     driver.get(origin_url)
 
     # Sleep for some time before getting the page source (wait for load)
@@ -448,68 +452,7 @@ def pull_data(chosen_sensors=[], exclude_sensors=[]):
 
 
 if __name__ == "__main__":
-
-    # Kill processes from before if error
-    kill_chrome_headless()
-
-    # Intitial config information
-    data_folder = get_config()["save_folder"]
-
-
-    #  This URL roughly covers LA county and Orange
-    origin_url = "https://cameras.alertcalifornia.org/?pos=33.9639_-118.2898_10"
-    # Set up browser options
-    browser_options = Options()
-    browser_options.add_argument("--headless")  # Enable headless mode
-
-    # Initialize the WebDriver with the options
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=browser_options)  # Automatically downloads and manages ChromeDriver
-    driver.get(origin_url)
-
-    # Sleep for some time before getting the page source (wait for load)
-    time.sleep(2)
-
-    # Scroll all the way through the gallery down to activate all camera locations
-    incremental_scroll(driver)
-
-    html_content = driver.page_source
-
-    # Get all the camera html containers
-    camera_html_info_list = fetch_class_content(html_content, "alert-ctt-root", "alert-ctt-hidden")
-    
-    
-    
-    # Iterate through each camera and scrape info
-    camera_positions = []
-    for cam_html in tqdm(camera_html_info_list):
-
-        # Get cam name and info
-        cam_id, cam_name = pull_camera_id(cam_html)
-
-        # Skip if no cam id present
-        if not cam_id:
-            continue
-
-        cam_data = load_and_save_cam_info(cam_html, data_folder, driver, cam_id, cam_name)
-        if cam_data is not None:
-            cam_name, lat_long = cam_data
-            print(lat_long)
-            camera_positions.append((cam_name, lat_long[0], lat_long[1]))
-        print("Camera data received, continuing to next camera.")
-
-    driver.quit()
-
-    # # Grab datetime again
-    # current_time = datetime.now()
-    # current_time_str = current_time.strftime("%Y%m%d%H%M%S")
-    # current_day = current_time.strftime("%Y%m%d")
-
-    # # Now, save the camera positions
-    # save_folder = data_folder + "/alertcalifornia/" + current_day
-    # cam_position_filepath = save_folder + "/positions.csv"
-    # with open(cam_position_filepath, "a", newline="") as file:
-    #     writer = csv.writer(file)
-    #     writer.writerows(camera_positions)
+    pull_data()
 
 
 # Notes:

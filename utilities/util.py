@@ -97,7 +97,20 @@ def get_config(filepath=None):
     resolved = filepath or os.environ.get("URBAN_SYSTEM_CONFIG", "./config.json")
     with open(resolved, "rb") as file:
         json_data = json.load(file)
-    return _expand_config_environment(json_data)
+    json_data = _expand_config_environment(json_data)
+    # Containers mount host storage at stable paths even when an existing config
+    # file contains host-specific absolute paths. Credentials remain untouched.
+    overrides = {
+        "save_folder": "URBAN_SAVE_FOLDER",
+        "backup_folder": "URBAN_BACKUP_FOLDER",
+        "owm_locations": "URBAN_OWM_LOCATIONS",
+        "purpleair_sensors": "URBAN_PURPLEAIR_SENSORS",
+        "cctv_locations": "URBAN_CCTV_LOCATIONS",
+    }
+    for config_key, environment_key in overrides.items():
+        if environment_key in os.environ:
+            json_data[config_key] = os.environ[environment_key]
+    return json_data
 
 
 # Function to obtain data for the last X amount of time

@@ -1,0 +1,14 @@
+.git
+.env
+.env.*
+!.env.example
+.venv
+venv
+pulled_data
+backups
+cache
+*.log
+*.zip
+**/__pycache__
+*.py[cod]
+.pytest_cache

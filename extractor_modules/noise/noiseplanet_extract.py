@@ -7,7 +7,7 @@ import argparse
 from datetime import datetime, timedelta, timezone, time
 from zoneinfo import ZoneInfo
 import pandas as pd
-from utilities.util import get_config 
+from extractor_modules.common.config import get_config
 from tqdm import tqdm
 
 def download_file_with_progress(url, output_path):

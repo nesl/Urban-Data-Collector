@@ -13,8 +13,6 @@ RUN apt-get update \
 WORKDIR /app
 COPY requirements.txt pyproject.toml ./
 COPY extractor_modules ./extractor_modules
-COPY observation_contract ./observation_contract
-COPY utilities ./utilities
 RUN pip install --upgrade pip && pip install . -r requirements.txt
 
-CMD ["python", "-m", "extractor_modules.container_scheduler", "--help"]
+CMD ["python", "-m", "extractor_modules.operations.scheduler", "--help"]

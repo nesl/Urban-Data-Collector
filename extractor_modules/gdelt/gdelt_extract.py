@@ -7,7 +7,7 @@ import requests
 
 import argparse
 from datetime import datetime, timedelta
-from utilities.util import get_config
+from extractor_modules.common.config import get_config
 
 # 1 Pull event, gkg, and vkg from the last update link (download to files)
 

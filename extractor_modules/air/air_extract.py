@@ -11,7 +11,7 @@ from aiopurpleair import API
 import numpy as np
 import time
 
-from utilities.util import get_config
+from extractor_modules.common.config import get_config
 
 
 def save_air_info(air_info, filename, current_day, save_folder):

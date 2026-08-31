@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 import sys
-from utilities.util import get_config
+from extractor_modules.common.config import get_config
 
 from extractor_modules.pems.handler import PeMSHandler
 

@@ -1,4 +1,5 @@
 import os
+import fcntl
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -15,7 +16,7 @@ from bs4 import BeautifulSoup
 import time
 import requests
 from datetime import datetime
-from utilities.util import get_config
+from extractor_modules.common.config import get_config
 import math
 import csv
 from tqdm import tqdm
@@ -452,7 +453,13 @@ def pull_data(chosen_sensors=[], exclude_sensors=[]):
 
 
 if __name__ == "__main__":
-    pull_data()
+    lock_file = open("/tmp/urban_alertcalifornia.lock", "w")
+    try:
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print("Another ALERTCalifornia extraction is already running; skipping")
+    else:
+        pull_data()
 
 
 # Notes:

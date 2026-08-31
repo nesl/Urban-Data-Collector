@@ -8,7 +8,7 @@ import boto3 # AWS access Python API
 from botocore import UNSIGNED
 from botocore.config import Config
 
-from utilities.util import get_config
+from extractor_modules.common.config import get_config
 import json
 
 # Save data into our database

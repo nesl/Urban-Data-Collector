@@ -116,18 +116,27 @@ def fetch_emails(mail: imaplib.IMAP4_SSL, limit: int = None) -> list[dict]:
         logging.error(f"Unexpected error: {str(e)}")
         return []
 
-def delete_emails(mail: imaplib.IMAP4_SSL, email_ids: list[str]) -> None:
-    """Delete emails with confirmation and error handling."""
-    if not email_ids:
-        return
-
-    try:
-        for email_id in email_ids:
-            mail.store(email_id, '+FLAGS', '\\Deleted')
-        mail.expunge()
-        logging.info(f"Deleted {len(email_ids)} emails successfully")
-    except Exception as e:
-        logging.error(f"Error deleting emails: {str(e)}")
+def fetch_emails_by_uid(mail: imaplib.IMAP4_SSL, email_uids: list[int]) -> list[dict]:
+    """Fetch stable IMAP UIDs without marking or deleting messages."""
+    emails = []
+    for email_uid in email_uids:
+        try:
+            status, data = mail.uid("fetch", str(email_uid), "(BODY.PEEK[])")
+            if status != "OK" or not data or not isinstance(data[0], tuple):
+                raise RuntimeError(f"Failed to fetch email UID {email_uid}")
+            msg = email.message_from_bytes(data[0][1])
+            parsed_date = parse_email_date(msg.get("Date", ""))
+            emails.append({
+                "id": str(email_uid),
+                "message_id": decode_header_value(msg.get("Message-ID", "")),
+                "subject": decode_header_value(msg.get("Subject", "")),
+                "body": extract_email_body(msg),
+                "sender": decode_header_value(msg.get("From", "")),
+                "date": parsed_date.isoformat(),
+            })
+        except Exception as exc:
+            logging.error(f"Error processing email UID {email_uid}: {exc}")
+    return emails
 
 def export_to_csv(emails: list[dict], filename: str, append: bool = False) -> None:
     """Export emails to CSV with proper file handling."""
@@ -173,7 +182,7 @@ def main():
     parser.add_argument("-a", "--append", action="store_true",
                         help="Append to CSV file")
     parser.add_argument("-d", "--delete", action="store_true",
-                        help="Delete fetched emails")
+                        help="Deprecated; fetched emails are always preserved")
     parser.add_argument("-l", "--limit", type=int,
                         help="Limit number of emails processed")
     args = parser.parse_args()
@@ -191,7 +200,7 @@ def main():
                     print("-" * 50)
 
             if args.delete:
-                delete_emails(mail, [e["id"] for e in emails])
+                logging.warning("--delete is deprecated and ignored; emails remain in the inbox")
 
     except KeyboardInterrupt:
         logging.info("Operation cancelled by user")

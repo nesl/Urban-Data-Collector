@@ -1,6 +1,6 @@
 import json
 
-from utilities.util import get_config
+from extractor_modules.common.config import get_config
 
 
 def test_container_paths_can_override_host_paths(tmp_path, monkeypatch):

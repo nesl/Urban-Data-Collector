@@ -5,7 +5,7 @@ from pyowm.utils import config
 from pyowm.utils import timestamps
 import csv
 from datetime import datetime
-from utilities.util import get_config
+from extractor_modules.common.config import get_config
 
 # Save to file
 def save_weather_to_file(curr_datetime, data, save_folder, current_day):
@@ -55,11 +55,13 @@ def extract_weather(weather_manager, save_folder, owm_names, owm_coordinates):
 
         # Define the header and data
         # header = ['Temperature (F)', 'Status', 'Humidity (%)', 'Wind Speed (m/s)']
+        wind = weather.wind()
         data = [
             weather.temperature('fahrenheit')['temp'],
             weather.detailed_status,
             weather.humidity,
-            weather.wind()['speed'],
+            wind.get('speed'),
+            wind.get('deg'),
             location_name
         ]
 

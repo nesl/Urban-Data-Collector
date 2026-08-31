@@ -2,7 +2,6 @@ config.json
 .env
 .env.*
 !.env.example
-extractor_modules/config/current.json
 extractor_modules/air/nearby_purpleair_sensors.csv
 .venv/
 venv/

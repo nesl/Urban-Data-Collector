@@ -4,7 +4,7 @@ import tarfile
 
 import pytest
 
-from extractor_modules import clean_daily_data as cleanup
+from extractor_modules.operations import archive as cleanup
 
 
 TODAY = date(2026, 8, 15)
@@ -28,15 +28,14 @@ def test_cleanup_archives_completed_days_and_retains_exact_limit(tmp_path):
 
     result = cleanup.execute_cleanup(raw, backup, max_days=3, today=TODAY)
 
-    # Five completed days existed; exactly the newest three remain, plus today.
+    # Three calendar days including today are retained.
     assert sorted(path.name for path in (raw / "weather_data").iterdir()) == [
-        "20260812",
         "20260813",
         "20260814",
         "20260815",
         "metadata",
     ]
-    assert result["days_deleted"] == 2
+    assert result["days_deleted"] == 3
     assert result["completed_days"] == 5
     assert len(list((backup / "raw" / "weather_data").glob("*.tar"))) == 5
 
@@ -74,7 +73,7 @@ def test_dry_run_does_not_create_backup_or_delete(tmp_path):
     )
 
     assert result["days_deleted"] == 0
-    assert result["days_would_delete"] == 1
+    assert result["days_would_delete"] == 2
     assert not backup.exists()
     assert (raw / "gkg" / "20260810").exists()
 
@@ -111,11 +110,11 @@ def test_configured_retention_is_used(monkeypatch, tmp_path):
 
     result = cleanup.delete_old_data([], [], dry_run=True)
 
-    assert result["days_would_delete"] == 1
+    assert result["days_would_delete"] == 2
 
 
-def test_negative_retention_is_rejected(tmp_path):
+def test_zero_retention_is_rejected(tmp_path):
     raw = tmp_path / "raw"
     raw.mkdir()
-    with pytest.raises(ValueError, match="zero or greater"):
-        cleanup.build_cleanup_plan(raw, -1, TODAY)
+    with pytest.raises(ValueError, match="at least 1"):
+        cleanup.build_cleanup_plan(raw, 0, TODAY)

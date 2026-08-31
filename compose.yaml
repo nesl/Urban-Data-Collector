@@ -21,19 +21,19 @@ x-collector: &collector
 services:
   gdelt-vkg:
     <<: *collector
-    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "* * * * *", "--", "python", "-m", "extractor_modules.gdelt.gdelt_extract", "--type", "vkg"]
+    command: ["python", "-m", "extractor_modules.operations.scheduler", "--cron", "* * * * *", "--", "python", "-m", "extractor_modules.gdelt.gdelt_extract", "--type", "vkg"]
 
   gdelt-gkg:
     <<: *collector
-    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "*/15 * * * *", "--", "python", "-m", "extractor_modules.gdelt.gdelt_extract", "--type", "gkg"]
+    command: ["python", "-m", "extractor_modules.operations.scheduler", "--cron", "*/15 * * * *", "--", "python", "-m", "extractor_modules.gdelt.gdelt_extract", "--type", "gkg"]
 
   pems:
     <<: *collector
-    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "0 8 * * *", "--", "python", "-m", "extractor_modules.pems.pems_extract"]
+    command: ["python", "-m", "extractor_modules.operations.scheduler", "--cron", "0 8 * * *", "--", "python", "-m", "extractor_modules.pems.pems_extract"]
 
   cctv:
     <<: *collector
-    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "*/15 * * * *", "--", "python", "-m", "extractor_modules.cctv.calcctv_extract"]
+    command: ["python", "-m", "extractor_modules.operations.scheduler", "--cron", "*/15 * * * *", "--", "python", "-m", "extractor_modules.cctv.calcctv_extract"]
 
   alertcalifornia:
     <<: *collector
@@ -47,24 +47,28 @@ services:
       URBAN_CCTV_LOCATIONS: /app/extractor_modules/cctv/cctv.kml
       TZ: ${TZ:-America/Los_Angeles}
       CHROMEDRIVER: /usr/bin/chromedriver
-    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "*/30 * * * *", "--", "python", "-m", "extractor_modules.alertcalifornia.alertcalifornia_extract"]
+    command: ["python", "-m", "extractor_modules.operations.scheduler", "--cron", "*/30 * * * *", "--", "python", "-m", "extractor_modules.alertcalifornia.alertcalifornia_extract"]
 
   weather:
     <<: *collector
-    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "0 * * * *", "--", "python", "-m", "extractor_modules.weather.weather_extract"]
+    command: ["python", "-m", "extractor_modules.operations.scheduler", "--cron", "0 * * * *", "--", "python", "-m", "extractor_modules.weather.weather_extract"]
 
   air:
     <<: *collector
-    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "0 * * * *", "--", "python", "-m", "extractor_modules.air.air_extract"]
+    command: ["python", "-m", "extractor_modules.operations.scheduler", "--cron", "0 * * * *", "--", "python", "-m", "extractor_modules.air.air_extract"]
 
   twitter-email:
     <<: *collector
-    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "*/5 * * * *", "--", "python", "-m", "extractor_modules.email.generate_csv", "--scheduled", "--delete"]
+    command: ["python", "-m", "extractor_modules.operations.scheduler", "--cron", "*/5 * * * *", "--", "python", "-m", "extractor_modules.email.generate_csv", "--scheduled"]
 
   citizen-email:
     <<: *collector
-    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "*/30 * * * *", "--", "python", "-m", "extractor_modules.email.citizen_scrape"]
+    command: ["python", "-m", "extractor_modules.operations.scheduler", "--cron", "*/30 * * * *", "--", "python", "-m", "extractor_modules.email.citizen_scrape"]
 
   cleanup:
     <<: *collector
-    command: ["python", "-m", "extractor_modules.container_scheduler", "--cron", "0 8 * * *", "--", "python", "-m", "extractor_modules.clean_daily_data"]
+    command: ["python", "-m", "extractor_modules.operations.scheduler", "--cron", "0 8 * * *", "--", "python", "-m", "extractor_modules.operations.archive"]
+
+  data-alert:
+    <<: *collector
+    command: ["python", "-m", "extractor_modules.operations.scheduler", "--cron", "0 10 * * *", "--", "python", "-m", "extractor_modules.operations.missing_data_alert"]

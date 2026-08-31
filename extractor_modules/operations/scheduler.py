@@ -8,9 +8,17 @@ import os
 import subprocess
 import sys
 
-from extractor_modules.scheduling import parse_cron_expr
-
 LOG = logging.getLogger(__name__)
+
+
+def parse_cron_expr(expr: str) -> dict[str, str]:
+    """Parse the five cron fields accepted by APScheduler."""
+    fields = expr.split()
+    if len(fields) != 5:
+        raise ValueError(
+            "Cron expression must have 5 fields: minute hour day month day_of_week"
+        )
+    return dict(zip(("minute", "hour", "day", "month", "day_of_week"), fields))
 
 
 def run_command(command: list[str]) -> None:

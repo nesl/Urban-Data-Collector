@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import requests
 import re
 from datetime import datetime
-from utilities.util import get_config
+from extractor_modules.common.config import get_config
 
 
 import xml.etree.ElementTree as ET
@@ -223,6 +223,5 @@ if __name__ == "__main__":
 
         
         save_cam_image(cam_tup, current_time_str, data_folder, current_day)
-
 
 

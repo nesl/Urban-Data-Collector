@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+import fcntl
 import os
 from pathlib import Path
 import shutil
 import tarfile
 import tempfile
 
-from utilities.util import get_config
+from extractor_modules.common.config import get_config
 
 
 DATE_FORMAT = "%Y%m%d"
@@ -39,13 +40,14 @@ def _is_date_directory(path: Path) -> bool:
 
 
 def build_cleanup_plan(save_folder: Path, max_days: int, today: date) -> list[SourcePlan]:
-    """Build a per-source plan using completed YYYYMMDD directories only."""
-    if max_days < 0:
-        raise ValueError("max_days must be zero or greater")
+    """Retain ``max_days`` calendar days including today."""
+    if max_days < 1:
+        raise ValueError("max_days must be at least 1")
     if not save_folder.is_dir():
         raise CleanupError(f"Data directory does not exist: {save_folder}")
 
     today_name = today.strftime(DATE_FORMAT)
+    retention_start = (today - timedelta(days=max_days - 1)).strftime(DATE_FORMAT)
     plans = []
     for source_dir in sorted(path for path in save_folder.iterdir() if path.is_dir()):
         completed = tuple(
@@ -55,14 +57,15 @@ def build_cleanup_plan(save_folder: Path, max_days: int, today: date) -> list[So
                 if _is_date_directory(path) and path.name < today_name
             )
         )
-        delete_count = max(0, len(completed) - max_days)
-        plans.append(
-            SourcePlan(
-                source=source_dir.name,
-                completed_days=completed,
-                days_to_delete=completed[:delete_count],
+        expired = tuple(path for path in completed if path.name < retention_start)
+        if completed or expired:
+            plans.append(
+                SourcePlan(
+                    source=source_dir.name,
+                    completed_days=completed,
+                    days_to_delete=expired,
+                )
             )
-        )
     return plans
 
 
@@ -85,12 +88,17 @@ def validate_archive(path: Path, expected_day: str) -> None:
         raise CleanupError(f"Archive contains an unexpected root: {path}")
 
 
-def create_archive_atomic(day_folder: Path, destination: Path) -> None:
-    """Create, validate, and atomically publish one tar archive."""
+def archive_needs_refresh(day_folder: Path, destination: Path) -> bool:
+    return not destination.exists() or day_folder.stat().st_mtime_ns > destination.stat().st_mtime_ns
+
+
+def create_archive_atomic(day_folder: Path, destination: Path) -> str:
+    """Create or refresh, validate, and atomically publish one tar archive."""
     destination.parent.mkdir(parents=True, exist_ok=True)
-    if destination.exists():
+    existed = destination.exists()
+    if not archive_needs_refresh(day_folder, destination):
         validate_archive(destination, day_folder.name)
-        return
+        return "verified"
 
     temporary_path = None
     try:
@@ -108,6 +116,7 @@ def create_archive_atomic(day_folder: Path, destination: Path) -> None:
         os.replace(temporary_path, destination)
         temporary_path = None
         validate_archive(destination, day_folder.name)
+        return "refreshed" if existed else "created"
     finally:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)
@@ -120,6 +129,7 @@ def execute_cleanup(
     max_days: int = 30,
     today: date | None = None,
     dry_run: bool = False,
+    require_mounted: bool = False,
 ) -> dict[str, int]:
     """Archive all completed days, then remove safely archived expired days.
 
@@ -128,27 +138,41 @@ def execute_cleanup(
     """
     effective_today = today or date.today()
     plans = build_cleanup_plan(save_folder, max_days, effective_today)
-    archives_needed = 0
+    if not dry_run:
+        existing = backup_folder
+        while not existing.exists() and existing != existing.parent:
+            existing = existing.parent
+        if os.statvfs(existing).f_flag & os.ST_RDONLY:
+            raise CleanupError(f"Backup filesystem is read-only: {existing}")
+        if require_mounted and not any(os.path.ismount(path) for path in (existing, *existing.parents) if path != Path("/")):
+            raise CleanupError(f"External backup disk is not mounted for {backup_folder}")
+    archives_needed = archives_to_refresh = archives_verified = 0
 
     for plan in plans:
         for day_folder in plan.completed_days:
             destination = archive_path(backup_folder, plan.source, day_folder.name)
-            if not destination.exists():
-                archives_needed += 1
+            needs_refresh = archive_needs_refresh(day_folder, destination)
+            archives_needed += int(not destination.exists())
+            archives_to_refresh += int(destination.exists() and needs_refresh)
             if dry_run:
-                if destination.exists():
+                if destination.exists() and not needs_refresh:
                     validate_archive(destination, day_folder.name)
-                action = "verified" if destination.exists() else "would archive"
+                    archives_verified += 1
+                    action = "verified"
+                else:
+                    action = "would refresh" if destination.exists() else "would archive"
                 print(f"DRY RUN: {action} {day_folder} -> {destination}")
             else:
-                create_archive_atomic(day_folder, destination)
+                action = create_archive_atomic(day_folder, destination)
+                archives_verified += int(action == "verified")
+                print(f"Archive {action}: {destination}")
 
     delete_count = sum(len(plan.days_to_delete) for plan in plans)
     for plan in plans:
         for day_folder in plan.days_to_delete:
             destination = archive_path(backup_folder, plan.source, day_folder.name)
             if dry_run:
-                print(f"DRY RUN: delete {day_folder} after archive validation")
+                print(f"DRY RUN: would delete {day_folder} after archive validation")
                 continue
             validate_archive(destination, day_folder.name)
             shutil.rmtree(day_folder)
@@ -158,6 +182,8 @@ def execute_cleanup(
         "sources": len(plans),
         "completed_days": sum(len(plan.completed_days) for plan in plans),
         "archives_needed": archives_needed,
+        "archives_to_refresh": archives_to_refresh,
+        "archives_verified": archives_verified,
         "days_deleted": 0 if dry_run else delete_count,
         "days_would_delete": delete_count,
     }
@@ -188,6 +214,7 @@ def delete_old_data(
         Path(config["backup_folder"]),
         max_days=retention_days,
         dry_run=dry_run,
+        require_mounted=not dry_run,
     )
 
 
@@ -207,6 +234,12 @@ def main(argv=None) -> int:
         help="print archive/deletion actions without changing files",
     )
     args = parser.parse_args(argv)
+    lock_file = open("/tmp/urban_clean_daily_data.lock", "w")
+    try:
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print("Another cleanup is already running; skipping")
+        return 0
     try:
         delete_old_data(max_days=args.max_days, dry_run=args.dry_run)
     except (CleanupError, OSError, ValueError) as exc:

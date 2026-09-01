@@ -2,8 +2,8 @@ import csv
 from pathlib import Path
 
 
-def test_synthetic_purpleair_inventory_documents_runtime_format():
-    path = Path("extractor_modules/air/nearby_purpleair_sensors.example.csv")
+def test_tracked_purpleair_inventory_has_runtime_format():
+    path = Path("extractor_modules/air/nearby_purpleair_sensors.csv")
     with path.open(newline="", encoding="utf-8") as stream:
         rows = list(csv.reader(stream))
 

@@ -68,19 +68,13 @@ def fetch_class_content(html_content, class_name, to_filter):
 # Pull the camera id from the html info
 #  The cam_html_info is a bs4 element
 def pull_camera_id(cam_html_info):
-    
-    # Webdriver wait until page, timeout after 10 seconds
-    time.sleep(1)
-    WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.CLASS_NAME, 'alert-ctt-thumb'))
-    )
-
+    """Parse a camera ID and name from an already-rendered gallery element."""
     # Find the image tag and get the 'src' attribute
     img_tag = cam_html_info.find('img', class_='alert-ctt-thumb')
     img_src = img_tag['src'] if img_tag else None
 
     # Ignore blank thumbnails
-    if "blank_thumb" in img_src:
+    if not img_src or "blank_thumb" in img_src:
         return "",""
     else:
         try:
@@ -162,7 +156,9 @@ def save_cam_location(img_folder, current_time, cam_direction, lat_long):
         file.write(str(lat_long[0]) + "," + str(lat_long[1]) + "," + str(cam_direction))
 
 # Handle the logic for each camera
-def load_and_save_cam_info(cam_html, data_folder, driver, cam_id, cam_name):
+def load_and_save_cam_info(
+    cam_html, data_folder, driver, origin_url, cam_id, cam_name
+):
 
 
     print("Setting up for " + str(cam_id))
@@ -414,42 +410,38 @@ def pull_data(chosen_sensors=[], exclude_sensors=[]):
     driver_path = os.environ.get("CHROMEDRIVER")
     service = Service(driver_path or ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=browser_options)
-    driver.get(origin_url)
+    try:
+        driver.get(origin_url)
 
-    # Sleep for some time before getting the page source (wait for load)
-    time.sleep(2)
+        # Sleep for some time before getting the page source (wait for load)
+        time.sleep(2)
 
-    # Scroll all the way through the gallery down to activate all camera locations
-    incremental_scroll(driver)
+        # Scroll through the gallery to activate all camera locations.
+        incremental_scroll(driver)
+        html_content = driver.page_source
+        camera_html_info_list = fetch_class_content(
+            html_content, "alert-ctt-root", "alert-ctt-hidden"
+        ) or []
 
-    html_content = driver.page_source
+        camera_positions = []
+        for cam_html in tqdm(camera_html_info_list):
+            cam_id, cam_name = pull_camera_id(cam_html)
+            if not cam_id:
+                continue
 
-    # Get all the camera html containers
-    camera_html_info_list = fetch_class_content(html_content, "alert-ctt-root", "alert-ctt-hidden")
-    
-    # Iterate through each camera and scrape info
-    camera_positions = []
-    for cam_html in tqdm(camera_html_info_list):
-
-        # Get cam name and info
-        cam_id, cam_name = pull_camera_id(cam_html)
-        # If the cam id is empty, skip it
-        if not cam_id:
-            continue
-
-        if cam_name in chosen_sensors:
-            cam_data = load_and_save_cam_info(cam_html, data_folder, driver, cam_id, cam_name)
-            if cam_data is not None:
-                cam_name, lat_long = cam_data
-                camera_positions.append((cam_name, lat_long[0], lat_long[1]))
-        elif not chosen_sensors and cam_name not in exclude_sensors:
-            cam_data = load_and_save_cam_info(cam_html, data_folder, driver, cam_id, cam_name)
-            if cam_data is not None:
-                cam_name, lat_long = cam_data
-                camera_positions.append((cam_name, lat_long[0], lat_long[1]))
-        
-
-    driver.quit()
+            if cam_name in chosen_sensors or (
+                not chosen_sensors and cam_name not in exclude_sensors
+            ):
+                cam_data = load_and_save_cam_info(
+                    cam_html, data_folder, driver, origin_url, cam_id, cam_name
+                )
+                if cam_data is not None:
+                    saved_name, lat_long = cam_data
+                    camera_positions.append(
+                        (saved_name, lat_long[0], lat_long[1])
+                    )
+    finally:
+        driver.quit()
 
 
 if __name__ == "__main__":

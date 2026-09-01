@@ -99,6 +99,11 @@ async def get_sensor_readings(api, current_date, current_day, nearby_sensors, da
 
 # Get a spread of sensors
 def get_even_distribution(nearby_sensors, num_centroids=50):
+    if not nearby_sensors:
+        raise ValueError("PurpleAir returned no outdoor sensors for this search area")
+    if num_centroids < 1:
+        raise ValueError("sensor count must be at least 1")
+    num_centroids = min(num_centroids, len(nearby_sensors))
     sensor_ids = [sensor[0] for sensor in nearby_sensors]  # Extract sensor IDs
     sensor_coords = np.array([sensor[1:-1] for sensor in nearby_sensors])  # Extract lat/lon coordinates
 
@@ -118,16 +123,15 @@ def get_even_distribution(nearby_sensors, num_centroids=50):
         selected_sensors.append((s_id, lat, long))  # Add the closest sensor
 
     # Remove duplicates (if any)
-    selected_sensors = list(set(selected_sensors))  # Use set to remove duplicates
+    return list(dict.fromkeys(selected_sensors))
 
-    print(selected_sensors)
-    return selected_sensors
-
-async def get_nearby_sensors(api, output_file):
+async def get_nearby_sensors(
+    api, output_file, latitude, longitude, radius_km, sensor_count=50
+):
 
     # Only get the instaneous pm2.5 readings from 10km around the center lat/long of LA
     sensor_results = await api.sensors.async_get_nearby_sensors(
-        ["location_type"], 34.0549, -118.2426, 30
+        ["location_type"], latitude, longitude, radius_km
     )
 
     nearby_sensors = []
@@ -147,7 +151,7 @@ async def get_nearby_sensors(api, output_file):
         if location_type.value == 0:
             nearby_sensors.append((sensor_id, latitude, longitude, location_type.value))
 
-    filtered_sensors = get_even_distribution(nearby_sensors)
+    filtered_sensors = get_even_distribution(nearby_sensors, sensor_count)
     
     # Save the inventory at the path selected in config.json.
     output_dir = os.path.dirname(os.path.abspath(output_file))
@@ -195,13 +199,51 @@ if __name__ == "__main__":
         action="store_true",
         help="query the Get Sensors API and regenerate the configured sensor inventory",
     )
+    parser.add_argument(
+        "--location",
+        nargs=2,
+        type=float,
+        metavar=("LATITUDE", "LONGITUDE"),
+        default=(34.0549, -118.2426),
+        help="search center (default: downtown Los Angeles)",
+    )
+    parser.add_argument(
+        "--radius-km",
+        type=float,
+        default=30,
+        help="search radius in kilometers (default: 30)",
+    )
+    parser.add_argument(
+        "--sensor-count",
+        type=int,
+        default=50,
+        help="maximum geographically distributed sensors to save (default: 50)",
+    )
     args = parser.parse_args()
 
     # Run our API
     API_KEY = API(api_key)
 
     if args.refresh_sensors:
-        asyncio.run(get_nearby_sensors(API_KEY, nearby_sensors_file))
+        latitude, longitude = args.location
+        if not -90 <= latitude <= 90:
+            parser.error("latitude must be between -90 and 90")
+        if not -180 <= longitude <= 180:
+            parser.error("longitude must be between -180 and 180")
+        if args.radius_km <= 0:
+            parser.error("--radius-km must be greater than zero")
+        if args.sensor_count < 1:
+            parser.error("--sensor-count must be at least 1")
+        asyncio.run(
+            get_nearby_sensors(
+                API_KEY,
+                nearby_sensors_file,
+                latitude,
+                longitude,
+                args.radius_km,
+                args.sensor_count,
+            )
+        )
         print(f"PurpleAir sensor inventory written to {nearby_sensors_file}")
         raise SystemExit(0)
 

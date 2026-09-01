@@ -1,12 +1,14 @@
 .git
+config.json
 .env
 .env.*
-!.env.example
 .venv
 venv
 pulled_data
+data
 backups
 cache
+noiseplanet_data
 *.log
 *.zip
 **/__pycache__

@@ -20,7 +20,6 @@ DEFAULT_SOURCES = {
     "alertcalifornia": 1,
     "cctv": 1,
     "gkg": 1,
-    "vkg": 1,
     "weather_data": 1,
     "pem_data_chp_incidents_day": 2,
     "pem_data_station_5min": 2,

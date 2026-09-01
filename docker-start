@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+config_file="$repo_dir/config.json"
+
+if [[ ! -f "$config_file" ]]; then
+  echo "Missing $config_file; copy config.example.json to config.json first." >&2
+  exit 2
+fi
+
+create_storage=0
+case "${1:-}" in
+  up|run-now|compose) create_storage=1 ;;
+esac
+
+mapfile -d '' -t storage_paths < <(
+  python3 - "$config_file" "$repo_dir" "$create_storage" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+config_path = Path(sys.argv[1])
+repo = Path(sys.argv[2])
+create_storage = sys.argv[3] == "1"
+with config_path.open(encoding="utf-8") as handle:
+    config = json.load(handle)
+
+for key in ("save_folder", "backup_folder"):
+    value = config.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise SystemExit(f"config.json field {key!r} must be a non-empty path string")
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = repo / path
+    path = path.resolve()
+    if create_storage:
+        path.mkdir(parents=True, exist_ok=True)
+    sys.stdout.buffer.write(str(path).encode() + b"\0")
+PY
+)
+
+if [[ ${#storage_paths[@]} -ne 2 ]]; then
+  echo "Could not resolve save_folder and backup_folder from config.json." >&2
+  exit 2
+fi
+
+export URBAN_SAVE_FOLDER_HOST=${storage_paths[0]}
+export URBAN_BACKUP_FOLDER_HOST=${storage_paths[1]}
+
+compose=(docker compose --project-directory "$repo_dir" -f "$repo_dir/compose.yaml")
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./docker-start up [SERVICE...]
+  ./docker-start run-now SERVICE [EXTRACTOR_ARGS...]
+  ./docker-start stop [SERVICE...]
+  ./docker-start down
+  ./docker-start ps
+  ./docker-start logs [--follow] [SERVICE...]
+  ./docker-start compose COMPOSE_ARGS...
+
+Storage bind mounts come from save_folder and backup_folder in config.json.
+EOF
+}
+
+if [[ $# -eq 0 ]]; then
+  usage
+  exit 2
+fi
+
+action=$1
+shift
+
+if [[ "$action" == "help" || "$action" == "--help" || "$action" == "-h" ]]; then
+  usage
+  exit 0
+fi
+
+if [[ "$action" == "up" ]]; then
+  exec "${compose[@]}" up -d --build "$@"
+fi
+
+if [[ "$action" == "run-now" ]]; then
+  if [[ $# -eq 0 ]]; then
+    echo "run-now requires a service name." >&2
+    usage
+    exit 2
+  fi
+  service=$1
+  shift
+  case "$service" in
+    gdelt-gkg) command=(python -m extractor_modules.gdelt.gdelt_extract) ;;
+    pems) command=(python -m extractor_modules.pems.pems_extract) ;;
+    cctv) command=(python -m extractor_modules.cctv.calcctv_extract) ;;
+    alertcalifornia) command=(python -m extractor_modules.alertcalifornia.alertcalifornia_extract) ;;
+    weather) command=(python -m extractor_modules.weather.weather_extract) ;;
+    air) command=(python -m extractor_modules.air.air_extract) ;;
+    twitter-email) command=(python -m extractor_modules.email.generate_csv --scheduled) ;;
+    citizen-email) command=(python -m extractor_modules.email.citizen_scrape) ;;
+    cleanup) command=(python -m extractor_modules.operations.archive) ;;
+    data-alert) command=(python -m extractor_modules.operations.missing_data_alert) ;;
+    *)
+      echo "Unknown run-now service: $service" >&2
+      exit 2
+      ;;
+  esac
+  exec "${compose[@]}" run --rm "$service" "${command[@]}" "$@"
+fi
+
+case "$action" in
+  compose)
+    exec "${compose[@]}" "$@"
+    ;;
+  stop|down|ps|logs|start|restart|build|pull)
+    exec "${compose[@]}" "$action" "$@"
+    ;;
+  *)
+    echo "Unknown action: $action" >&2
+    usage
+    exit 2
+    ;;
+esac

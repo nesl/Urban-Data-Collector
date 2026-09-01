@@ -1,11 +1,10 @@
 config.json
 .env
 .env.*
-!.env.example
-extractor_modules/air/nearby_purpleair_sensors.csv
 .venv/
 venv/
 pulled_data/
+data/
 backups/
 cache/
 noiseplanet_data/

@@ -48,6 +48,8 @@ Copy the example once, put your accounts and API keys in `config.json`, and
 start everything (by everything, we mean all services shown in the below table):
 
 ```bash
+cp config.example.json config.json
+chmod 600 config.json
 ./docker-start up
 ```
 
@@ -72,7 +74,7 @@ installed only in the ALERTCalifornia image.
 | `cleanup` | `urban-data-collector-operations` | Operation | Archives completed data days to the backup directory and removes old local days only after archive validation. |
 | `data-alert` | `urban-data-collector-operations` | Operation | Checks that expected daily datasets exist locally or in backup archives and sends a missing-data email over SMTP. |
 
-### Alternative ways to run:
+### Alternative ways to run
 
 If you want to just run a single service (not all of them), start one service or a selected group by putting its service name after `up`:
 
@@ -358,13 +360,12 @@ operator-maintained inventory or a deliberately selected subset.
 
 | Source | How collection scope is chosen | Manual choice or dynamic query |
 |---|---|---|
-| PurpleAir | `--refresh-sensors` queries outdoor sensors around the requested `--location` and `--radius-km`, then K-means selects the requested number of geographically distributed sensors and updates the tracked inventory. Hourly collection uses only that saved inventory. | Both. Geographic discovery is automatic, while the search area and sensor count are operator choices and cost controls. |
+| PurpleAir | The `extractor_modules.air.refresh_sensors` command queries outdoor sensors around the requested `--location` and `--radius-km`, then K-means selects the requested number of geographically distributed sensors and updates the tracked inventory. Hourly collection uses only that saved inventory. | Both. Geographic discovery is automatic, while the search area and sensor count are operator choices and cost controls. |
 | OpenWeather | Calls the OpenWeather Current Weather API for the coordinates in `extractor_modules/weather/owm_locations.txt`. | Manual/predefined coordinate inventory. Add or remove locations by editing the inventory. |
 | Caltrans CCTV | Queries the Caltrans stream-list page on every run and selects every camera whose county is `Los Angeles`; optional include/exclude lists can narrow it. | Dynamic geographic/administrative query, with optional manual filtering. |
 | ALERTCalifornia | Opens the ALERTCalifornia gallery at the configured LA-area map bounds, discovers the cameras currently exposed by the site, and optionally applies include/exclude lists. | Dynamic geographic query, with the map bounds and optional filters chosen by the operator. |
 | Caltrans PeMS | Logs into the Clearinghouse and downloads the newest District 7 files for the two configured file types. | Manual district and product selection; file discovery is dynamic. |
 | GDELT GKG/events | Downloads the latest GDELT update and retains rows mentioning Los Angeles in the configured location fields. | Dynamic feed query with a hard-coded LA filter. |
-| GDELT Visual KG | Downloads the latest Visual KG update and retains Los Angeles text/geographic matches. | Dynamic feed query with a hard-coded LA bounding box/text filter. |
 | X and Citizen | Reads new messages delivered to the configured ingestion mailbox and advances a persistent IMAP UID checkpoint. | Event-driven. The mailbox, notification subscriptions, and subject/content rules define scope. Messages remain in the inbox. |
 | Noise and seismic | Use their checked-in station/configuration files when enabled. | Manual inventories; disabled by default. |
 
@@ -388,7 +389,6 @@ column order rather than infer it from the first record.
 | PeMS station 5-minute | Provider `.txt.gz` file. Rows contain the Caltrans station-observation schema, including timestamp, station/district/freeway/direction/lane type and aggregate/per-lane traffic measurements such as flow, occupancy, and speed. The extractor does not rewrite provider columns. |
 | PeMS CHP incidents | Provider `.txt.zip` daily incident product. Incident fields and encoding are retained exactly as published by the PeMS Clearinghouse. |
 | GDELT GKG/events | CSV with the original provider columns retained and numbered (`0`, `1`, ...). The extractor writes both filtered GKG and event/export products into `gkg`; rows are filtered for Los Angeles before storage. Each GKG CSV also has a same-stem directory (for example, `20260805070000.gkg/`) containing SHA-256-named raw `.html`, parsed-body `.txt`, and request/parser `.json` files plus `manifest.json`. Parsing uses Newspaper without an LLM. Failed or blocked URLs retain JSON error metadata. |
-| GDELT Visual KG | CSV with the original 12 Visual KG columns retained and numbered `0` through `11`, filtered for Los Angeles text or coordinates. A header-only file means that no rows matched. |
 | X notifications | Raw `email_raw.v1` CSV: `schema_version`, `source`, `imap_uid`, `message_id`, `received_at`, `sender`, `subject`, `body`, `ingested_at`. |
 | Citizen notifications | The same raw `email_raw.v1` CSV contract. Files are written only when messages are processed. |
 
@@ -412,7 +412,6 @@ number of incoming emails can change the result substantially.
 | PeMS station 5-minute | about 17–19 MB | One compressed District 7 daily file. |
 | PeMS CHP incidents | about 0.3–0.45 MB | One compressed daily incident file. |
 | GDELT GKG/events and article pages | Provider CSVs average about 13 MB/day. Article HTML, parsed text, and metadata add an estimated 0.4 GB/day at roughly 1,170 URLs/day (one live 47-URL interval used 17 MB). | News volume, page size, publisher blocking, and LA matches vary substantially; allow at least 0.5 GB/day. |
-| GDELT Visual KG | currently about 4 KB | Recent files were mostly header-only; allow more space when LA records match. |
 | X notifications | typically 5–20 KB on active days | Event-driven; days without matching messages may have no folder. |
 | Citizen notifications | typically 4–10 KB in the current sample | Event-driven and dependent on message volume and raw email content. |
 | Noise/seismic | insufficient current data for a reliable estimate | Disabled by default; measure after enabling with the intended inventory. |
@@ -495,7 +494,13 @@ restart only that service around the test:
 │   └── YYYYMMDDHHMMSS.location
 ├── citizen_data/YYYYMMDD/<epoch_ms>.csv
 ├── cctv/YYYYMMDD/<camera>/YYYYMMDDHHMMSS.jpg
-├── gkg/YYYYMMDD/<provider_timestamp>.*.csv
+├── gkg/YYYYMMDD/
+│   ├── <provider_timestamp>.*.csv
+│   └── <provider_timestamp>.gkg/               # article capture for each GKG interval
+│       ├── <url_hash>.html
+│       ├── <url_hash>.txt
+│       ├── <url_hash>.json
+│       └── manifest.json
 ├── noise_planet/YYYYMMDD/                       # if enabled
 ├── pem_data_chp_incidents_day/YYYYMMDD/*.txt.zip
 ├── pem_data_station_5min/YYYYMMDD/*.txt.gz

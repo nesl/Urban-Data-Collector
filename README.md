@@ -45,20 +45,10 @@ not schedule or supervise jobs; Docker Compose still does that work.
 ## Quick start
 
 Copy the example once, put your accounts and API keys in `config.json`, and
-start everything:
+start everything (by everything, we mean all services shown in the below table):
 
 ```bash
-cp config.example.json config.json
-chmod 600 config.json
 ./docker-start up
-```
-
-Containers run as UID/GID `1000:1000` by default so files created in the bind
-mounts belong to the usual first Linux user instead of root. If your account
-uses different IDs, supply them when running the wrapper:
-
-```bash
-URBAN_UID=$(id -u) URBAN_GID=$(id -g) ./docker-start up
 ```
 
 
@@ -82,7 +72,9 @@ installed only in the ALERTCalifornia image.
 | `cleanup` | `urban-data-collector-operations` | Operation | Archives completed data days to the backup directory and removes old local days only after archive validation. |
 | `data-alert` | `urban-data-collector-operations` | Operation | Checks that expected daily datasets exist locally or in backup archives and sends a missing-data email over SMTP. |
 
-Start one service or a selected group by putting its service name after `up`:
+### Alternative ways to run:
+
+If you want to just run a single service (not all of them), start one service or a selected group by putting its service name after `up`:
 
 ```bash
 ./docker-start up air

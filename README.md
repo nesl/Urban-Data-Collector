@@ -576,7 +576,7 @@ because they are event-driven or disabled. Alerts authenticate to Gmail using
 ## Tests
 
 ```bash
-python -m pip install -r requirements-dev.txt
+python -m pip install -r requirements/dev.txt
 python -m pytest -q
 ```
 

@@ -21,10 +21,17 @@ def parse_cron_expr(expr: str) -> dict[str, str]:
     return dict(zip(("minute", "hour", "day", "month", "day_of_week"), fields))
 
 
-def run_command(command: list[str]) -> None:
+def run_command(command: list[str], timeout_seconds: int | None = None) -> None:
     """Run a collector once without terminating its scheduler on failure."""
     LOG.info("Starting scheduled command: %s", " ".join(command))
-    result = subprocess.run(command, check=False)
+    try:
+        result = subprocess.run(command, check=False, timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        LOG.error(
+            "Scheduled command exceeded %d seconds and was terminated",
+            timeout_seconds,
+        )
+        return
     if result.returncode:
         LOG.error("Scheduled command exited with status %d", result.returncode)
     else:
@@ -37,11 +44,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--cron", required=True, help='for example: "*/15 * * * *"')
     parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        help="terminate a collector run after this many seconds",
+    )
+    parser.add_argument(
         "command",
         nargs=argparse.REMAINDER,
         help="command to run; place it after --",
     )
     args = parser.parse_args(argv)
+    if args.timeout_seconds is not None and args.timeout_seconds <= 0:
+        parser.error("--timeout-seconds must be positive")
     command = args.command
     if command and command[0] == "--":
         command = command[1:]
@@ -59,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
     scheduler.add_job(
         run_command,
         "cron",
-        args=[command],
+        args=[command, args.timeout_seconds],
         id="collector",
         max_instances=1,
         coalesce=True,

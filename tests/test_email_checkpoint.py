@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from extractor_modules.email.email_filters import is_citizen_notification
 from extractor_modules.email.imap_checkpoint import begin_incremental_run, save_checkpoint
 
 
@@ -47,3 +48,23 @@ def test_email_collectors_do_not_contain_delete_operations():
 
     assert "mail.expunge" not in source
     assert "\\\\Deleted" not in source
+
+
+def test_citizen_sender_filter_accepts_expected_mailbox_with_display_name():
+    assert is_citizen_notification({
+        "sender": "Citizen Alerts <noreply@alerts.citizen.com>"
+    })
+    assert is_citizen_notification({
+        "sender": "NOREPLY@ALERTS.CITIZEN.COM"
+    })
+    assert is_citizen_notification({
+        "sender": "Citizen <noreply@mail.citizen.com>"
+    })
+
+
+def test_citizen_sender_filter_rejects_other_mailboxes():
+    assert not is_citizen_notification({"sender": "alerts@ifttt.com"})
+    assert not is_citizen_notification({"sender": "Citizen <noreply@example.com>"})
+    assert not is_citizen_notification({"sender": "alerts@mail.citizen.com"})
+    assert not is_citizen_notification({"sender": "noreply@notcitizen.com"})
+    assert not is_citizen_notification({"sender": ""})

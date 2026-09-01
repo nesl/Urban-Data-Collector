@@ -6,11 +6,11 @@ import logging
 import os
 from datetime import datetime
 
+from extractor_modules.email.email_filters import is_citizen_notification
 from extractor_modules.email.get_emails import connect_to_gmail_imap, fetch_emails_by_uid
 from extractor_modules.email.imap_checkpoint import acquire_collector_lock, begin_incremental_run, save_checkpoint
 from extractor_modules.email.raw_email import normalize_email, write_raw_batch
 from extractor_modules.common.config import get_config
-
 
 def process_emails_to_csv(username: str, password: str, output_dir: str = ".", state_root: str = ".", max_results: int = 500, subject_filter: str | None = None):
     """Persist raw messages; retained name keeps scheduler compatibility."""
@@ -30,6 +30,7 @@ def process_emails_to_csv(username: str, password: str, output_dir: str = ".", s
         emails = fetch_emails_by_uid(mail, selected_uids)
         if len(emails) != len(selected_uids):
             raise RuntimeError("Not every selected Citizen email could be fetched; checkpoint unchanged")
+        emails = [item for item in emails if is_citizen_notification(item)]
         if subject_filter:
             needle = subject_filter.lower()
             emails = [item for item in emails if needle in item.get("subject", "").lower()]

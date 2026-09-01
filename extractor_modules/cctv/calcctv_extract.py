@@ -8,11 +8,13 @@ from extractor_modules.common.config import get_config
 
 import xml.etree.ElementTree as ET
 
+HTTP_TIMEOUT = (5, 10)
+
 # 1: Get all links
 def fetch_tbody_content(url):
     try:
         # Fetch the webpage content
-        response = requests.get(url)
+        response = requests.get(url, timeout=HTTP_TIMEOUT)
         response.raise_for_status()  # Ensure the request was successful
         
         # Parse the webpage with BeautifulSoup
@@ -78,6 +80,9 @@ def save_cam_image(cam_tup, current_time, data_folder, current_day):
 
     # First, get the image
     img_url = get_image_url(cam_url)
+    if not img_url:
+        print(f"Skipping {cam_tup['cam_name']}: no image URL available")
+        return False
 
     # Create save folder
     save_folder = data_folder + "/cctv"
@@ -90,7 +95,7 @@ def save_cam_image(cam_tup, current_time, data_folder, current_day):
     # Next, download the image
     try:
         # Send a GET request to fetch the image
-        response = requests.get(img_url)
+        response = requests.get(img_url, timeout=HTTP_TIMEOUT)
         response.raise_for_status()  # Check for request errors
 
         # Finally, save the image
@@ -104,16 +109,18 @@ def save_cam_image(cam_tup, current_time, data_folder, current_day):
         # Save the image content to a file
         with open(output_filepath, "wb") as file:
             file.write(response.content)
+        return True
 
     except Exception as e:
         print(f"An error occurred for image download: {e}")
+        return False
 
     
 def get_image_url(cam_url):
     
     try:
         # Fetch the webpage content
-        response = requests.get(cam_url)
+        response = requests.get(cam_url, timeout=HTTP_TIMEOUT)
         response.raise_for_status()  # Ensure the request was successful
         
         # Parse the webpage with BeautifulSoup
@@ -179,6 +186,8 @@ def pull_data(chosen_sensors=[], exclude_sensors=[]):
     
     url = "https://cwwp2.dot.ca.gov/vm/streamlist.htm"
     tbody_content = fetch_tbody_content(url)
+    if not tbody_content:
+        raise RuntimeError("Unable to retrieve the Caltrans CCTV camera list")
     cam_tuples = filter_by_county(tbody_content)
 
     print(len(cam_tuples))
@@ -202,26 +211,5 @@ def pull_data(chosen_sensors=[], exclude_sensors=[]):
             save_cam_image(cam_tup, current_time_str, data_folder, current_day)
 
 if __name__ == "__main__":
-
-    url = "https://cwwp2.dot.ca.gov/vm/streamlist.htm"
-    tbody_content = fetch_tbody_content(url)
-    cam_tuples = filter_by_county(tbody_content)
-
-    print(len(cam_tuples))
-
-    # Some timer here:
-    current_time = datetime.now()
-    current_time_str = current_time.strftime("%Y%m%d%H%M%S")
-    current_day = current_time.strftime("%Y%m%d")
-
-    # Get folder for saving data into
-    data_folder = get_config()["save_folder"]
-
-    for cam_tup in cam_tuples:
-        
-        cam_name = cam_tup["cam_name"]
-
-        
-        save_cam_image(cam_tup, current_time_str, data_folder, current_day)
-
+    pull_data()
 

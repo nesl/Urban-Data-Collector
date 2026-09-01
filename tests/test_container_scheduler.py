@@ -23,3 +23,8 @@ def test_runner_reports_missing_command():
 
 def test_run_command_does_not_raise_for_failed_child():
     run_command(["sh", "-c", "exit 7"])
+
+
+def test_run_command_terminates_overdue_child(caplog):
+    run_command(["sh", "-c", "sleep 2"], timeout_seconds=1)
+    assert "exceeded 1 seconds" in caplog.text

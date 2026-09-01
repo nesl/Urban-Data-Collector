@@ -43,7 +43,7 @@ services:
       context: .
       target: cctv
     image: urban-data-collector-cctv:local
-    command: ["python", "-m", "extractor_modules.operations.scheduler", "--cron", "*/15 * * * *", "--", "python", "-m", "extractor_modules.cctv.calcctv_extract"]
+    command: ["python", "-m", "extractor_modules.operations.scheduler", "--cron", "*/15 * * * *", "--timeout-seconds", "840", "--", "python", "-m", "extractor_modules.cctv.calcctv_extract"]
 
   alertcalifornia:
     <<: *collector

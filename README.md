@@ -70,7 +70,7 @@ installed only in the ALERTCalifornia image.
 | `weather` | `urban-data-collector-weather` | Extractor | Calls the OpenWeather API for every coordinate in the checked-in weather inventory. |
 | `air` | `urban-data-collector-air` | Extractor | Calls the PurpleAir API for every sensor in the checked-in PurpleAir inventory. |
 | `twitter-email` | `urban-data-collector-email` | Extractor | Reads new X/IFTTT notification messages from Gmail over IMAP and stores the raw messages. |
-| `citizen-email` | `urban-data-collector-email` | Extractor | Reads new Citizen alert messages from Gmail over IMAP and stores the raw messages. |
+| `citizen-email` | `urban-data-collector-email` | Extractor | Reads new messages from the `noreply` mailbox at `citizen.com` subdomains (including `alerts.citizen.com` and `mail.citizen.com`) through Gmail IMAP and stores the raw messages. |
 | `cleanup` | `urban-data-collector-operations` | Operation | Archives completed data days to the backup directory and removes old local days only after archive validation. |
 | `data-alert` | `urban-data-collector-operations` | Operation | Checks that expected daily datasets exist locally or in backup archives and sends a missing-data email over SMTP. |
 
@@ -366,7 +366,7 @@ operator-maintained inventory or a deliberately selected subset.
 | ALERTCalifornia | Opens the ALERTCalifornia gallery at the configured LA-area map bounds, discovers the cameras currently exposed by the site, and optionally applies include/exclude lists. | Dynamic geographic query, with the map bounds and optional filters chosen by the operator. |
 | Caltrans PeMS | Logs into the Clearinghouse and downloads the newest District 7 files for the two configured file types. | Manual district and product selection; file discovery is dynamic. |
 | GDELT GKG/events | Downloads the latest GDELT update and retains rows mentioning Los Angeles in the configured location fields. | Dynamic feed query with a hard-coded LA filter. |
-| X and Citizen | Reads new messages delivered to the configured ingestion mailbox and advances a persistent IMAP UID checkpoint. | Event-driven. The mailbox, notification subscriptions, and subject/content rules define scope. Messages remain in the inbox. |
+| X and Citizen | Reads new messages delivered to the configured ingestion mailbox and advances a persistent IMAP UID checkpoint. Citizen accepts the parsed `noreply` mailbox at `citizen.com` or any of its subdomains; X matches `twitter` or `x.com` in the sender/subject. | Event-driven. The mailbox, notification subscriptions, and source-specific rules define scope. Messages remain in the inbox. |
 | Noise and seismic | Use their checked-in station/configuration files when enabled. | Manual inventories; disabled by default. |
 
 Current weather conditions are obtained from the OpenWeather Current Weather

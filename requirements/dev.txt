@@ -1,0 +1,10 @@
+-r base.txt
+-r air.txt
+-r alertcalifornia.txt
+-r cctv.txt
+-r email.txt
+-r gdelt.txt
+-r pems.txt
+-r weather.txt
+
+pytest>=8,<9

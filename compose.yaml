@@ -61,6 +61,11 @@ services:
       URBAN_CCTV_LOCATIONS: /app/extractor_modules/cctv/cctv.kml
       TZ: America/Los_Angeles
       CHROMEDRIVER: /usr/bin/chromedriver
+      # Chromium runs as the host UID, not root, and needs writable profile,
+      # cache, and crash-handler directories.
+      HOME: /tmp/chrome-home
+      XDG_CONFIG_HOME: /tmp/chrome-home/.config
+      XDG_CACHE_HOME: /tmp/chrome-home/.cache
     command: ["python", "-m", "extractor_modules.operations.scheduler", "--cron", "*/30 * * * *", "--", "python", "-m", "extractor_modules.alertcalifornia.alertcalifornia_extract"]
 
   weather:

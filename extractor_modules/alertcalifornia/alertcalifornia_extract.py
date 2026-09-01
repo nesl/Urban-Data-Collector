@@ -1,5 +1,7 @@
 import os
 import fcntl
+import shutil
+import tempfile
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -405,12 +407,17 @@ def pull_data(chosen_sensors=[], exclude_sensors=[]):
     browser_options.add_argument("--headless")  # Enable headless mode
     browser_options.add_argument("--no-sandbox")
     browser_options.add_argument("--disable-dev-shm-usage")
+    browser_options.add_argument("--disable-crash-reporter")
+    browser_options.add_argument("--disable-breakpad")
+    chrome_profile = tempfile.mkdtemp(prefix="urban-chromium-", dir="/tmp")
+    browser_options.add_argument(f"--user-data-dir={chrome_profile}")
 
     # Initialize the WebDriver with the options
     driver_path = os.environ.get("CHROMEDRIVER")
     service = Service(driver_path or ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=browser_options)
+    driver = None
     try:
+        driver = webdriver.Chrome(service=service, options=browser_options)
         driver.get(origin_url)
 
         # Sleep for some time before getting the page source (wait for load)
@@ -441,7 +448,9 @@ def pull_data(chosen_sensors=[], exclude_sensors=[]):
                         (saved_name, lat_long[0], lat_long[1])
                     )
     finally:
-        driver.quit()
+        if driver is not None:
+            driver.quit()
+        shutil.rmtree(chrome_profile, ignore_errors=True)
 
 
 if __name__ == "__main__":

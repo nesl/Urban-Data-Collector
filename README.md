@@ -71,7 +71,7 @@ installed only in the ALERTCalifornia image.
 
 | Compose service | Image | Kind | Access mechanism and purpose |
 |---|---|---|---|
-| `gdelt-gkg` | `urban-data-collector-gdelt` | Extractor | Polls the public GDELT event/GKG HTTP feeds, downloads their ZIP/CSV products, and saves Los Angeles matches. |
+| `gdelt-gkg` | `urban-data-collector-gdelt` | Extractor | Polls the public GDELT event/GKG HTTP feeds, saves Los Angeles matches, and downloads and parses the webpages referenced by matching GKG rows. |
 | `pems` | `urban-data-collector-pems` | Extractor | Signs in to the Caltrans PeMS Clearinghouse and downloads District 7 traffic-station and CHP-incident files. |
 | `cctv` | `urban-data-collector-cctv` | Extractor | Scrapes the Caltrans camera stream list and downloads snapshots from Los Angeles County cameras. |
 | `alertcalifornia` | `urban-data-collector-alertcalifornia` | Extractor | Uses Chromium browser automation to discover ALERTCalifornia cameras and capture images and locations. |
@@ -395,7 +395,7 @@ column order rather than infer it from the first record.
 | ALERTCalifornia | JPEG snapshot plus a same-timestamp `.location` text file containing `latitude,longitude,camera_direction`. Camera identity is the parent folder. |
 | PeMS station 5-minute | Provider `.txt.gz` file. Rows contain the Caltrans station-observation schema, including timestamp, station/district/freeway/direction/lane type and aggregate/per-lane traffic measurements such as flow, occupancy, and speed. The extractor does not rewrite provider columns. |
 | PeMS CHP incidents | Provider `.txt.zip` daily incident product. Incident fields and encoding are retained exactly as published by the PeMS Clearinghouse. |
-| GDELT GKG/events | CSV with the original provider columns retained and numbered (`0`, `1`, ...). The current extractor writes both filtered GKG and event/export products into `gkg`; rows are filtered for Los Angeles before storage. |
+| GDELT GKG/events | CSV with the original provider columns retained and numbered (`0`, `1`, ...). The extractor writes both filtered GKG and event/export products into `gkg`; rows are filtered for Los Angeles before storage. Each GKG CSV also has a same-stem directory (for example, `20260805070000.gkg/`) containing SHA-256-named raw `.html`, parsed-body `.txt`, and request/parser `.json` files plus `manifest.json`. Parsing uses Newspaper without an LLM. Failed or blocked URLs retain JSON error metadata. |
 | GDELT Visual KG | CSV with the original 12 Visual KG columns retained and numbered `0` through `11`, filtered for Los Angeles text or coordinates. A header-only file means that no rows matched. |
 | X notifications | Raw `email_raw.v1` CSV: `schema_version`, `source`, `imap_uid`, `message_id`, `received_at`, `sender`, `subject`, `body`, `ingested_at`. |
 | Citizen notifications | The same raw `email_raw.v1` CSV contract. Files are written only when messages are processed. |
@@ -419,17 +419,17 @@ number of incoming emails can change the result substantially.
 | ALERTCalifornia | about 2–48 MB in the available sample | Highly dependent on site availability, discovered cameras, and successful browser runs. |
 | PeMS station 5-minute | about 17–19 MB | One compressed District 7 daily file. |
 | PeMS CHP incidents | about 0.3–0.45 MB | One compressed daily incident file. |
-| GDELT GKG/events | about 13 MB average; roughly 0.4–31 MB observed | News volume and LA matches vary by day. |
+| GDELT GKG/events and article pages | Provider CSVs average about 13 MB/day. Article HTML, parsed text, and metadata add an estimated 0.4 GB/day at roughly 1,170 URLs/day (one live 47-URL interval used 17 MB). | News volume, page size, publisher blocking, and LA matches vary substantially; allow at least 0.5 GB/day. |
 | GDELT Visual KG | currently about 4 KB | Recent files were mostly header-only; allow more space when LA records match. |
 | X notifications | typically 5–20 KB on active days | Event-driven; days without matching messages may have no folder. |
 | Citizen notifications | typically 4–10 KB in the current sample | Event-driven and dependent on message volume and raw email content. |
 | Noise/seismic | insufficient current data for a reliable estimate | Disabled by default; measure after enabling with the intended inventory. |
 
-With the current inventories, a normal day is dominated by camera images and is
-roughly 0.55–0.75 GB before archive/tar overhead. Thirty local calendar days
-therefore require roughly 17–23 GB under present conditions. Capacity planning
-should include additional headroom for full camera days and future inventory
-growth.
+With the current inventories and GKG article capture, a normal day is expected
+to use roughly 0.95–1.25 GB before archive/tar overhead. Thirty local calendar
+days therefore require approximately 29–38 GB under present conditions.
+Capacity planning should include additional headroom for full camera days,
+unusually large news days, and future inventory growth.
 
 The OpenWeather and PurpleAir inventories are part of their collectors. Some LA geographic
 bounds are defined in extractor code, so replacing an inventory alone does not

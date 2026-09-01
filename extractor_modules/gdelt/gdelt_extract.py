@@ -1,5 +1,6 @@
 import os
 import io
+from pathlib import Path
 
 import pandas as pd
 import requests
@@ -7,6 +8,7 @@ import requests
 
 from datetime import datetime, timedelta
 from extractor_modules.common.config import get_config
+from extractor_modules.gdelt.article_download import download_gkg_articles
 
 # Pull event and GKG data from the last-update feed.
 
@@ -96,7 +98,9 @@ def pull_data_gkg(latest_update_link, data_type, save_folder):
                 final_url, "zip"
             )
             dataframe = filter_gkg(dataframe)
-            save_to_csv(dataframe, final_url, save_folder)
+            csv_path = save_to_csv(dataframe, final_url, save_folder)
+            summary = download_gkg_articles(dataframe, Path(csv_path))
+            print(f"Article downloads: {summary}")
         # Download and parse
         
         # return dataframe
@@ -139,6 +143,7 @@ def save_to_csv(df, csv_url, save_folder):
     filename = '.'.join(filename)
     filepath = save_folder + "/" + filename
     df.to_csv(filepath, index=False)
+    return filepath
 
 
 def pull_data(chosen_sensors=[], exclude_sensors=[]):

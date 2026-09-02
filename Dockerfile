@@ -66,8 +66,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY requirements/processing.txt /tmp/requirements.txt
 RUN pip install --upgrade pip && pip install -r /tmp/requirements.txt
-COPY enrichment ./enrichment
-COPY receiver ./receiver
+COPY processing ./processing
 COPY urban_observation_model ./urban_observation_model
 
-CMD ["python", "-m", "enrichment.service", "--help"]
+CMD ["python", "-m", "processing.enrichment.service", "--help"]

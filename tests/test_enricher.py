@@ -1,8 +1,8 @@
 import hashlib
 
 from urban_observation_model import InlineFile, Observation, SCHEMA_VERSION
-from enrichment import Enricher
-from enrichment.cache import EnrichmentCache
+from processing.enrichment import Enricher
+from processing.enrichment.cache import EnrichmentCache
 
 
 class Result:

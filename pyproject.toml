@@ -18,7 +18,7 @@ processing = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["extractor_modules*", "replay*", "receiver*", "enrichment*", "urban_observation_model*"]
+include = ["extractor_modules*", "processing*", "replay*", "urban_observation_model*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.json", "*.txt", "*.csv", "*.kml", "*.jpg"]

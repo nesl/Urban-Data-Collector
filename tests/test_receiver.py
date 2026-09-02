@@ -5,7 +5,7 @@ import socket
 import threading
 
 from urban_observation_model import InlineFile, Observation, SCHEMA_VERSION
-from receiver.receiver import EnrichingHandler, JSONLHandler, handle_connection
+from processing.receiver.receiver import EnrichingHandler, JSONLHandler, handle_connection
 
 
 class FlushableStringIO(io.StringIO):

@@ -146,7 +146,7 @@ services:
     command:
       - python
       - -m
-      - enrichment.service
+      - processing.enrichment.service
       - --host
       - 0.0.0.0
       - --port
@@ -173,7 +173,7 @@ services:
     command:
       - python
       - -m
-      - receiver.receiver
+      - processing.receiver.receiver
       - --host
       - 0.0.0.0
       - --port

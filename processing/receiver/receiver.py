@@ -10,7 +10,7 @@ import socket
 from typing import Protocol
 
 from urban_observation_model import Observation, ObservationValidationError
-from enrichment import EnrichmentClient
+from processing.enrichment import EnrichmentClient
 
 
 class ObservationHandler(Protocol):

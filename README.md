@@ -3,7 +3,9 @@
 Urban Observations collects live and daily data for Los Angeles from public
 feeds, authenticated APIs, traffic and wildfire cameras, and email alerts. Raw
 observations are written to a configurable data directory for use by SIGMUS,
-IncidentLens, or other analysis pipelines.
+IncidentLens, or other analysis pipelines. The same repository also provides a
+separate receiver/enrichment profile for an analysis machine; those services
+are never started by the collection profile.
 
 ## Requirements
 
@@ -552,6 +554,129 @@ feeds are expected through yesterday; PeMS receives one additional day of
 publication grace. Twitter, Citizen, noise, and seismic are excluded by default
 because they are event-driven or disabled. Alerts authenticate to Gmail using
 `email_acc_info` and are sent to `data_quality_alerts.recipient`.
+
+## Convert and replay collected data
+
+The replay, receiver, and enrichment components are optional here because they
+are intended to feed **SIGMUS or IncidentLens** on an analysis machine. Urban
+Observations owns their shared implementation so both downstream systems consume
+the same model and enrichment results. The normal collection deployment neither
+starts nor depends on these processing containers.
+
+The replay subsystem reads data only after collection. It does not run, import,
+or modify an extractor; write to the collection or backup directories; call
+provider APIs; or use an LLM or VLM. Local date folders are preferred when the
+same partition also has an archive. Older dates are read directly from
+`<backup_folder>/raw/<source>/YYYYMMDD.tar` without extracting them permanently.
+The repository contains the single `urban-observation.v1` model used by replay,
+the receiver, SIGMUS, and IncidentLens. For a non-Docker development install:
+
+```bash
+python -m pip install -e .
+```
+
+The collection profile does not import or run the receiver or enrichment code.
+
+Every input is converted to one compact JSON object per line:
+
+```json
+{"id":"air:...","source":"air","time":"2026-09-02T17:00:00Z","end_time":null,"sensor":"54101","latitude":34.052,"longitude":-118.244,"data":{"pm25":12.4},"files":[],"raw":{"format":"purpleair_csv.v1","path":"...","member":null,"row":3}}
+```
+
+`data` retains source-specific measurements. Images remain external file
+references; an archived reference contains both the TAR path and member name.
+Legacy email semantic columns are preserved with `legacy_` names when they are
+the only historical representation, but replay never generates new semantics.
+New GDELT article bodies are read from the saved text files; link-only historical
+rows remain link-only and are not downloaded during replay.
+
+Run a fixed, half-open historical interval at maximum speed and write JSONL:
+
+```bash
+python -m replay.replay \
+  --from 2026-08-01 \
+  --to 2026-08-08 \
+  > observations.jsonl
+```
+
+Select one or more sources by repeating `--source`:
+
+```bash
+python -m replay.replay \
+  --from 2026-08-01 --to 2026-08-08 \
+  --source air --source weather
+```
+
+Monitor observations collected after the replay process starts:
+
+```bash
+python -m replay.replay --from now --follow
+```
+
+Catch up from a date through the current day at maximum speed, then continue
+monitoring:
+
+```bash
+python -m replay.replay --from 2026-08-01 --follow
+```
+
+Monitoring uses polling and process-local observation IDs. There is deliberately
+no persistent checkpoint in this first version, so restarting a dated catch-up
+replays that requested range. Consumers should use the stable `id` when they
+need durable deduplication. `--data-root`, `--backup-root`, `--poll-seconds`, and
+`--timezone` provide runtime overrides. The default timezone for naive collector
+and PeMS timestamps is `America/Los_Angeles`; explicit timezone-bearing email
+timestamps and GDELT UTC timestamps retain their supplied meaning.
+
+### Inline network replay and backpressure
+
+Start the processing profile on the SIGMUS/IncidentLens machine:
+
+```bash
+OPENAI_API_KEY=... ./docker-start processing-up
+```
+
+This starts one enrichment service and one receiver. The receiver listens on
+port `8766` and writes `processing-output/observations.jsonl` by default. Set
+`URBAN_PROCESSING_OUTPUT_HOST` to change that directory,
+`URBAN_RECEIVER_PORT` to change the published port, and
+`URBAN_ANOMALY_THRESHOLD` to change the gate. Set
+`URBAN_ENRICHMENT_ANOMALY_ONLY=true` to run without LLM/VLM calls. The
+processing profile does not require `config.json`, the raw-data mounts, or any
+provider credentials.
+
+The enrichment service is the sole observation-level LLM/VLM and geocoding
+implementation. One consolidated model request produces event, location,
+entity, relation, effect, incident, and summary annotations. Results are cached
+in `processing-output/enrichment.sqlite3` using the raw observation content,
+enrichment version, and forced/non-forced mode, so restarts and repeated replays
+do not repeat paid work. IncidentLens may request `force=true` for an initially
+skipped observation inside active hypothesis coverage; that forced result is
+cached separately.
+
+Then send a historical interval from the collection machine:
+
+```bash
+python -m replay.replay \
+  --from 2026-08-01 --to 2026-08-02 \
+  --socket-host 127.0.0.1 --socket-port 8766
+```
+
+Network replay always replaces file references with inline Base64 content plus
+the original filename, media type, byte size, and SHA-256 digest. The receiver
+validates and decodes every asset before invoking its handler. It handles one
+message at a time and sends an ACK only after the handler returns successfully;
+the sender does not advance until that matching ACK arrives. This stop-and-wait
+protocol supplies backpressure without a queue or rate setting.
+
+Urban Observations owns the model, receiver, anomaly gate, and enrichment code.
+SIGMUS and IncidentLens read the resulting common JSONL and own only their
+application-specific database or REPORT adapters.
+A validation failure produces a non-retryable rejection; a handler failure can
+produce a retryable rejection. The sender retains and retries the current observation after a
+connection failure, retryable NACK, or timeout, and never has more than one
+unacknowledged observation in flight. Configure this with `--ack-timeout` and
+`--network-retries`.
 
 ## Troubleshooting
 

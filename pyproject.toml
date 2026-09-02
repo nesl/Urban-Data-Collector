@@ -7,10 +7,18 @@ name = "urban-observations"
 version = "0.1.0"
 description = "Raw urban observation collectors and operational jobs"
 requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+processing = [
+    "beautifulsoup4>=4.12",
+    "openai>=1",
+    "requests>=2.31",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["extractor_modules*"]
+include = ["extractor_modules*", "replay*", "receiver*", "enrichment*", "urban_observation_model*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.json", "*.txt", "*.csv", "*.kml", "*.jpg"]

@@ -6,6 +6,7 @@ venv/
 pulled_data/
 data/
 backups/
+processing-output/
 cache/
 noiseplanet_data/
 **/__pycache__/

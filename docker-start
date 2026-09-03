@@ -8,10 +8,6 @@ usage() {
   cat <<'EOF'
 Usage:
   ./docker-start up [SERVICE...]
-  ./docker-start processing-up
-  ./docker-start processing-stop
-  ./docker-start processing-logs [--follow] [SERVICE...]
-  ./docker-start processing-ps
   ./docker-start run-now SERVICE [EXTRACTOR_ARGS...]
   ./docker-start stop [SERVICE...]
   ./docker-start down
@@ -20,7 +16,7 @@ Usage:
   ./docker-start compose COMPOSE_ARGS...
 
 Storage bind mounts come from save_folder and backup_folder in config.json.
-The processing profile writes enriched observations under processing-output by default.
+Replay, receiving, and enrichment are provided by urban-observation-processing.
 EOF
 }
 
@@ -29,12 +25,7 @@ if [[ "${1:-}" == "help" || "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   exit 0
 fi
 
-processing_action=0
-case "${1:-}" in
-  processing-up|processing-stop|processing-logs|processing-ps) processing_action=1 ;;
-esac
-
-if [[ $processing_action -eq 0 && ! -f "$config_file" ]]; then
+if [[ ! -f "$config_file" ]]; then
   echo "Missing $config_file; copy config.example.json to config.json first." >&2
   exit 2
 fi
@@ -45,8 +36,7 @@ case "${1:-}" in
 esac
 
 storage_paths=()
-if [[ $processing_action -eq 0 ]]; then
-  mapfile -d '' -t storage_paths < <(
+mapfile -d '' -t storage_paths < <(
     python3 - "$config_file" "$repo_dir" "$create_storage" <<'PY'
 import json
 from pathlib import Path
@@ -70,28 +60,15 @@ for key in ("save_folder", "backup_folder"):
         path.mkdir(parents=True, exist_ok=True)
     sys.stdout.buffer.write(str(path).encode() + b"\0")
 PY
-  )
-fi
+)
 
-if [[ $processing_action -eq 0 && ${#storage_paths[@]} -ne 2 ]]; then
+if [[ ${#storage_paths[@]} -ne 2 ]]; then
   echo "Could not resolve save_folder and backup_folder from config.json." >&2
   exit 2
 fi
 
-if [[ $processing_action -eq 0 ]]; then
-  export URBAN_SAVE_FOLDER_HOST=${storage_paths[0]}
-  export URBAN_BACKUP_FOLDER_HOST=${storage_paths[1]}
-else
-  # Compose interpolates the inactive collection profile too. These paths only
-  # satisfy interpolation and are never mounted by processing services.
-  export URBAN_SAVE_FOLDER_HOST="$repo_dir/processing-output/.unused-data"
-  export URBAN_BACKUP_FOLDER_HOST="$repo_dir/processing-output/.unused-backups"
-fi
-
-export URBAN_PROCESSING_OUTPUT_HOST=${URBAN_PROCESSING_OUTPUT_HOST:-$repo_dir/processing-output}
-if [[ $processing_action -eq 1 && "${1:-}" == "processing-up" ]]; then
-  mkdir -p "$URBAN_PROCESSING_OUTPUT_HOST"
-fi
+export URBAN_SAVE_FOLDER_HOST=${storage_paths[0]}
+export URBAN_BACKUP_FOLDER_HOST=${storage_paths[1]}
 
 compose=(docker compose --project-directory "$repo_dir" -f "$repo_dir/compose.yaml")
 
@@ -105,22 +82,6 @@ shift
 
 if [[ "$action" == "up" ]]; then
   exec "${compose[@]}" --profile collection up -d --build "$@"
-fi
-
-if [[ "$action" == "processing-up" ]]; then
-  exec "${compose[@]}" --profile processing up -d --build enrichment receiver
-fi
-
-if [[ "$action" == "processing-stop" ]]; then
-  exec "${compose[@]}" --profile processing stop enrichment receiver
-fi
-
-if [[ "$action" == "processing-logs" ]]; then
-  exec "${compose[@]}" --profile processing logs "$@"
-fi
-
-if [[ "$action" == "processing-ps" ]]; then
-  exec "${compose[@]}" --profile processing ps
 fi
 
 if [[ "$action" == "run-now" ]]; then

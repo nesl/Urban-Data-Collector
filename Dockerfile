@@ -55,18 +55,3 @@ COPY extractor_modules/operations/archive.py ./extractor_modules/operations/arch
 COPY extractor_modules/operations/missing_data_alert.py ./extractor_modules/operations/missing_data_alert.py
 
 CMD ["python", "-m", "extractor_modules.operations.scheduler", "--help"]
-
-FROM python:3.11-slim AS processing
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PYTHONPATH=/app
-
-WORKDIR /app
-COPY requirements/processing.txt /tmp/requirements.txt
-RUN pip install --upgrade pip && pip install -r /tmp/requirements.txt
-COPY processing ./processing
-COPY urban_observation_model ./urban_observation_model
-
-CMD ["python", "-m", "processing.enrichment.service", "--help"]

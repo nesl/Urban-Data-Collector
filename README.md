@@ -104,6 +104,9 @@ mounts selected by `config.json`:
 ./docker-start down
 ```
 
+Use `./docker-start down` to stop all containers belonging to this repository.
+The `stop` command requires one or more service names.
+
 Omit the service after `logs -f` to follow everything. With the example
 configuration, Compose stores collected data in `./data`, backups in
 `./backups`, and uses `America/Los_Angeles` for schedules. Change the two paths

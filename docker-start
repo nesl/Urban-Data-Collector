@@ -9,7 +9,7 @@ usage() {
 Usage:
   ./docker-start up [SERVICE...]
   ./docker-start run-now SERVICE [EXTRACTOR_ARGS...]
-  ./docker-start stop [SERVICE...]
+  ./docker-start stop SERVICE [SERVICE...]
   ./docker-start down
   ./docker-start ps
   ./docker-start logs [--follow] [SERVICE...]
@@ -84,6 +84,10 @@ if [[ "$action" == "up" ]]; then
   exec "${compose[@]}" --profile collection up -d --build "$@"
 fi
 
+if [[ "$action" == "down" ]]; then
+  exec "${compose[@]}" --profile collection down "$@"
+fi
+
 if [[ "$action" == "run-now" ]]; then
   if [[ $# -eq 0 ]]; then
     echo "run-now requires a service name." >&2
@@ -109,6 +113,12 @@ if [[ "$action" == "run-now" ]]; then
       ;;
   esac
   exec "${compose[@]}" run --rm "$service" "${command[@]}" "$@"
+fi
+
+if [[ "$action" == "stop" && $# -eq 0 ]]; then
+  echo "stop requires at least one service; use ./docker-start down to stop all containers." >&2
+  usage
+  exit 2
 fi
 
 case "$action" in

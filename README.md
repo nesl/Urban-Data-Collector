@@ -614,3 +614,7 @@ python -m pytest -q
 
 Tests remain in the source repository for regression checking but are not copied
 into the production container image.
+
+## Bugs:
+- Weather data for Glendale points to Arizona, not California.  Dates prior to 09/09/26 will have this problem.
+- Purpleair has an indoor/outdoor sensor distinction, which was not incorporated into our filtering until 02/28/25

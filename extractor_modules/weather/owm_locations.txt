@@ -1,4 +1,4 @@
-Glendale, US, 33.5387, -112.186
+Glendale, US, 34.1469, -118.2478
 Pasadena, US, 34.1478, -118.1445
 Beverly Hills, US, 34.0736, -118.4004
 Santa Monica, US, 34.0195, -118.4912

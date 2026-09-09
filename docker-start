@@ -71,6 +71,9 @@ export URBAN_SAVE_FOLDER_HOST=${storage_paths[0]}
 export URBAN_BACKUP_FOLDER_HOST=${storage_paths[1]}
 
 compose=(docker compose --project-directory "$repo_dir" -f "$repo_dir/compose.yaml")
+if [[ -f "$repo_dir/compose.local.yaml" ]]; then
+  compose+=(-f "$repo_dir/compose.local.yaml")
+fi
 
 if [[ $# -eq 0 ]]; then
   usage
